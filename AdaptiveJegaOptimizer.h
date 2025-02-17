@@ -2,6 +2,9 @@
 #define _ADAPTIVE_JEGA_OPTIMIZER_H_
 
 #include<JEGAOptimizer.hpp>
+#include<JegaEvaluatorCreator.h>
+#include<JegaEvaluator.h>
+#include<JegaDriver.h>
 
 /*****************************************************
  *  This class extends JEGAOptimizer, Dakota's 
@@ -9,43 +12,48 @@
  *  Algorithm (JEGA) library. We modify its optimization 
  *  loop to integrate an Adaptive Decision Model based 
  *  on Gaussian Process. This model predicts whether 
- *  high-fidelity fluid dynamics simulations (M2C) 
- *  are necessary or if simpler interpolation estimates 
+ *  high-fidelity fluid dynamics simulations (M2C) are 
+ *  necessary or if simpler interpolation estimates 
  *  (FEST) will suffice. Note that JEGAOptimizer's 
- *  Evaluate, Driver, and EvaluatorCreator classes are 
- *  private and inaccessible here.
+ *  Evaluator, Driver, and EvaluatorCreator classes 
+ *  and ParameterDatabase variables are private and 
+ *  inaccessible here. Hence, we do not directly derive 
+ *  from JEGAOptimizer but refactor most of its 
+ *  functionality.
  *****************************************************/
 
-class AdaptiveJegaOptimizer : public Dakota::JEGAOptimizer {
+class AdaptiveJegaOptimizer : public Dakota::Optimizer {
+
+  JEGA::Utilities::ParameterDatabase* param_db; 
+  JegaEvaluatorCreator* eval_creator;
 
 public:
 
   //! Default constructor
-  AdaptiveJegaOptimizer(ProblemDescDB& prob_db, Model& model);
+  AdaptiveJegaOptimizer(Dakota::ProblemDescDB& prob_db, Dakota::Model& model);
 
-  //! Default Destructor
-  ~AdaptiveJegaOptimizer() { };
-
-  //! Initializes population
-  void initialize_run() override;
+  //! Default Destructor -- Calls ~Optimizer automatically
+  ~AdaptiveJegaOptimizer() override;
 
   //! Interface to Dakota's core_run
   void core_run() override;
+
+private:
+
+  void LoadParameters();
 
 };
 
 
 /*****************************************************
- *  This class derives from JEGATraits. Dakota 
+ *  This class derives from TraitsBase. Dakota 
  *  uses this class to verify the optimizer's 
  *  capabilities, such as support for 
- *  non-linear constraints and its types. Overrides 
- *  are generally unnecessary here as we want to
- *  mimic JEGA as much as possible. That being said,
- *  the functions are included here for clarity.
+ *  non-linear constraints and its types. Hre as we 
+ *  want to mimic JEGATraits as much as possible. 
  *****************************************************/
 
-class AdaptiveJegaTraits : public JEGATraits {
+class AdaptiveJegaTraits : public Dakota::TraitsBase {
 
 public:
 
@@ -68,13 +76,13 @@ public:
   bool supports_nonlinear_inequality() override { return true; }
 
   //! Return format for nonlinear inequality constraints
-  NONLINEAR_EQUALITY_FORMAT nonlinear_equality_format() override { 
-    return NONLINEAR_EQUALITY_FORMAT::TRUE_EQUALITY; 
+  Dakota::NONLINEAR_EQUALITY_FORMAT nonlinear_equality_format() override { 
+    return Dakota::NONLINEAR_EQUALITY_FORMAT::TRUE_EQUALITY; 
   }
 
   //! Return format for nonlinear inequality constraints
-  NONLINEAR_INEQUALITY_FORMAT nonlinear_inequality_format() override { 
-    return NONLINEAR_INEQUALITY_FORMAT::TWO_SIDED;
+  Dakota::NONLINEAR_INEQUALITY_FORMAT nonlinear_inequality_format() override { 
+    return Dakota::NONLINEAR_INEQUALITY_FORMAT::TWO_SIDED;
     //return NONLINEAR_INEQUALITY_FORMAT::ONE_SIDED_UPPER; 
   }
 
