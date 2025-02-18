@@ -14,6 +14,7 @@
 // Eddy utility includes.
 #include<utilities/include/EDDY_DebugScope.hpp>
 
+// Include the main optimizer class to get Model and other dakota things.
 #include<DakotaOptimizer.hpp>
 
 /*****************************************************

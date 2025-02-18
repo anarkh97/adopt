@@ -38,9 +38,27 @@ public:
   //! Interface to Dakota's core_run
   void core_run() override;
 
+  //! Note we can return multiple best solutions even in the case of SOGA.
+  bool returns_multiple_points() const override { return true; };
+
 private:
 
-  void LoadParameters();
+  //! JEGA related methods
+  void LoadParameterDatabase();
+  void LoadAlgorithmConfig(JEGA::FrontEnd::AlgorithmConfig& config);
+  void LoadProblemConfig(JEGA::FrontEnd::ProblemConfig& config);
+  void LoadDesignVariables(JEGA::FrontEnd::ProblemConfig& config);
+  void LoadObjectiveFunctions(JEGA::FrontEnd::ProblemConfig& config);
+  void LoadConstraints(JEGA::FrontEnd::ProblemConfig& config);
+
+  //! Dakota related methods
+
+  void GetBestSOSolutions(const JEGA::Utilities::DesignOFSortSet& from,
+                          const JEGA::Algorithms::GeneticAlgorithm& ga,
+			  std::multimap<Dakota::RealRealPair, JEGA::Utilities::Design*>&);
+
+  void LoadDakotaResponses(const JEGA::Utilities::Design& from, 
+                           Dakota::Variables& vars, Dakota::Response& resp) const;
 
 };
 
