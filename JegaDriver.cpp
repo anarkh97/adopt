@@ -47,13 +47,13 @@ JegaDriver::PerformIterations(GeneticAlgorithm *ga)
     JEGA_LOGGING_IF_ON(double elapsed = (double)(clock() - start) / CLOCKS_PER_SEC;)
 
     JEGALOG_II(ga->GetLogger(), lquiet(), this, ostream_entry(lquiet(), 
-               "JEGA Front End: " + theGA->GetName() + " execution took ") 
+               "JEGA Front End: " + ga->GetName() + " execution took ") 
                << elapsed << " seconds.")
 
     JEGALOG_II_G(lquiet(), this, ostream_entry(lquiet(), "JEGA Front End: "
                  "Execution took ") << elapsed << " seconds.")
 
-    return DeepDuplicate(theGA->GetCurrentSolution());
+    return DeepDuplicate(ga->GetCurrentSolution());
 
   } catch(const exception &e) {
     JEGALOG_II_G_F(this, text_entry(lfatal(), "JEGA Front End Error: "

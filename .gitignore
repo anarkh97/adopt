@@ -3,3 +3,6 @@
 /Makefile
 /cmake_install.cmake
 /adopt
+tests/
+backup/
+version.h

@@ -1,17 +1,26 @@
 #include<JegaEvaluator.h>
 
+// JEGAConfig.hpp should be the first include in all JEGA files.
+#include <../Utilities/include/JEGAConfig.hpp>
+#include <../Utilities/include/Logging.hpp>
+
+// JEGA utility includes.
+#include <../Utilities/include/DesignGroup.hpp>
+#include <../Utilities/include/ConstraintInfo.hpp>
+
 using namespace std;
 using namespace Dakota;
 using namespace JEGA::Logging;
-using namespace JEGA::FrontEnd;
 using namespace eddy::utilities;
 using namespace JEGA::Utilities;
 using namespace JEGA::Algorithms;
 
 //-----------------------------------------------------------------------------
 
-JegaEvaluator::JegaEvaluator(GeneticAlgorithm &algorithm, Model &model_)
-             : GeneticAlgorithmEvaluator(algorithm), model(model_)
+JegaEvaluator::JegaEvaluator(GeneticAlgorithm &algorithm, Model &tmodel_, 
+                             Model &emodel_)
+             : GeneticAlgorithmEvaluator(algorithm), true_model(tmodel_), 
+               error_model(emodel_)
 {
   EDDY_FUNC_DEBUGSCOPE
 }
@@ -19,7 +28,8 @@ JegaEvaluator::JegaEvaluator(GeneticAlgorithm &algorithm, Model &model_)
 //-----------------------------------------------------------------------------
 
 JegaEvaluator::JegaEvaluator(const JegaEvaluator &copy)
-             : GeneticAlgorithmEvaluator(copy), model(copy.model)
+             : GeneticAlgorithmEvaluator(copy), true_model(copy.true_model),
+               error_model(copy.error_model)
 {
   EDDY_FUNC_DEBUGSCOPE
 }
@@ -27,17 +37,65 @@ JegaEvaluator::JegaEvaluator(const JegaEvaluator &copy)
 //-----------------------------------------------------------------------------
 
 JegaEvaluator::JegaEvaluator(const JegaEvaluator &copy, GeneticAlgorithm &algo,
-                             Model &model_)
-             : GeneticAlgorithmEvaluator(copy, algorithm), model(model_)
+                             Model &tmodel_, Model &emodel_)
+             : GeneticAlgorithmEvaluator(copy, algo), true_model(tmodel_),
+               error_model(emodel_)
 {
   EDDY_FUNC_DEBUGSCOPE
 }
 
 //-----------------------------------------------------------------------------
 
-JegaEvaluator::JegaEvaluator(GeneticAlgorithm &alg)
+bool JegaEvaluator::Evaluate(Design &des)
 {
+  EDDY_FUNC_DEBUGSCOPE
+  JEGALOG_II_F(GetLogger(), this, text_entry(lfatal(), GetName() + 
+               ": You cannot use Evaluate(Design&) with this "
+               "evaluator...ever."))
+  return false;
+}
 
+//-----------------------------------------------------------------------------
+
+string JegaEvaluator::GetName() const
+{
+  EDDY_FUNC_DEBUGSCOPE
+  return JegaEvaluator::Name();
+}
+
+//-----------------------------------------------------------------------------
+
+string JegaEvaluator::GetDescription() const
+{
+  EDDY_FUNC_DEBUGSCOPE
+  return JegaEvaluator::Description();
+}
+
+//-----------------------------------------------------------------------------
+
+GeneticAlgorithmOperator*
+JegaEvaluator::Clone(GeneticAlgorithm &algorithm) const
+{
+  EDDY_FUNC_DEBUGSCOPE
+  return new JegaEvaluator(*this, algorithm, true_model, error_model);
+}
+
+//-----------------------------------------------------------------------------
+
+size_t JegaEvaluator::GetNumberNonLinearConstraints() const
+{
+  EDDY_FUNC_DEBUGSCOPE
+  return ModelUtils::num_nonlinear_eq_constraints(true_model) +
+         ModelUtils::num_nonlinear_ineq_constraints(true_model);
+}
+
+//-----------------------------------------------------------------------------
+
+size_t JegaEvaluator::GetNumberLinearConstraints() const
+{
+  EDDY_FUNC_DEBUGSCOPE
+  return ModelUtils::num_linear_eq_constraints(true_model) +
+         ModelUtils::num_linear_ineq_constraints(true_model);
 }
 
 //-----------------------------------------------------------------------------
@@ -48,10 +106,10 @@ JegaEvaluator::SeparateVariables(const Design &from, RealVector &into_cont) cons
 
   EDDY_FUNC_DEBUGSCOPE
 
-  size_t num_cv  = model.cv();
-  size_t num_div = model.div();
-  size_t num_drv = model.drv();
-  size_t num_dsv = model.dsv();
+  size_t num_cv  = ModelUtils::cv(true_model);
+  size_t num_div = ModelUtils::div(true_model);
+  size_t num_drv = ModelUtils::drv(true_model);
+  size_t num_dsv = ModelUtils::dsv(true_model);
 
   // Currently we only support continuous real variables.
   if(num_div > 0) {
@@ -122,7 +180,7 @@ JegaEvaluator::RecordResponses(const RealVector &from, Design &into) const
 //-----------------------------------------------------------------------------
 
 //! Performs design evaluations using the model interface.
-void
+bool
 JegaEvaluator::Evaluate(DesignGroup &group)
 {
 // TODO: This is where Dakota Model is called which launches simulations.

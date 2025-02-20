@@ -24,13 +24,16 @@
 
 class AdaptiveJegaOptimizer : public Dakota::Optimizer {
 
-  JEGA::Utilities::ParameterDatabase* param_db; 
-  JegaEvaluatorCreator* eval_creator;
+  std::shared_ptr<JEGA::Utilities::ParameterDatabase> 
+    param_db; 
+  std::shared_ptr<JegaEvaluatorCreator> eval_creator;
 
 public:
 
   //! Default constructor
-  AdaptiveJegaOptimizer(Dakota::ProblemDescDB& prob_db, Dakota::Model& model);
+  AdaptiveJegaOptimizer(Dakota::ProblemDescDB& prob_db, 
+                        std::shared_ptr<Dakota::Model> true_model,
+			std::shared_ptr<Dakota::Model> error_model);
 
   //! Default Destructor -- Calls ~Optimizer automatically
   ~AdaptiveJegaOptimizer() override;
@@ -82,7 +85,7 @@ public:
   virtual ~AdaptiveJegaTraits() { };
 
   //! This is needed to handle constraints
-  inline static double noValue() { return std::numeric_limits<Real>::max(); }
+  inline static double noValue() { return std::numeric_limits<Dakota::Real>::max(); }
 
   //! Return the flag indicating whether method supports continuous variables
   bool supports_continuous_variables() override { return true; }

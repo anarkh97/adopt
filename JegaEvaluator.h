@@ -28,19 +28,20 @@ class JegaEvaluator : public JEGA::Algorithms::GeneticAlgorithmEvaluator {
 
 private:
 
-  Dakota::Model& model;
+  Dakota::Model& true_model;
+  Dakota::Model& error_model;
 
 public:
 
   static const std::string& Name() {
     EDDY_FUNC_DEBUGSCOPE
-    static const string ret("ADAPTIVE JEGA Evaluator");
+    static const std::string ret("ADAPTIVE JEGA Evaluator");
     return ret;
-  }
+  } 
 
   static const std::string& Description() {
     EDDY_FUNC_DEBUGSCOPE
-    static const string ret(
+    static const std::string ret(
         "This evaluator uses Sandia's DAKOTA optimization software to "
         "evaluate the passed in Designs.  This makes it possible to "
         "take advantage of the fact that DAKOTA is designed to run on "
@@ -49,58 +50,17 @@ public:
     return ret;
   }
 
-  //! This Evaluate is overriden so that an error is raised.
-  //! According to JEGAOptimizer::Evaluator this function
-  //! is not compatible w/ DAKOTA's multi-level parallelism.
-  bool Evaluate(JEGA::Utilities::Design& des) override {
-    EDDY_FUNC_DEBUGSCOPE
-  
-    JEGALOG_II_F(GetLogger(), this, text_entry(lfatal(), GetName() + 
-                 ": You cannot use Evaluate(Design&) with this "
-                 "evaluator...ever."))
-    return false;
-  }
+  std::string GetName() const override;
 
-  std::string GetName() const override {
-    EDDY_FUNC_DEBUGSCOPE
-    return JegaEvaluator::Name();
-  }
-
-  std::string GetDescription() const override {
-    EDDY_FUNC_DEBUGSCOPE
-    return JegaEvaluator::Description();
-  }
+  std::string GetDescription() const override;
 
   JEGA::Algorithms::GeneticAlgorithmOperator* 
-  Clone(JEGA::Algorithms::GeneticAlgorithm& algorithm) const override {
-    EDDY_FUNC_DEBUGSCOPE
-    return new JegaEvaluator(*this, algorithm, _model);
-  }
-
-protected:
-
-  //! Here we only deal w/ continuous design variables.
-  void SeparateVariables(const Design& from, RealVector& intoCont) const;
-
-  void RecordResponses(const RealVector& from, Design& into) const;
-
-  std::size_t GetNumberNonLinearConstraints() const {
-    EDDY_FUNC_DEBUGSCOPE
-    return _model.num_nonlinear_eq_constraints() +
-           _model.num_nonlinear_ineq_constraints();
-  }
-
-  std::size_t GetNumberLinearConstraints() const {
-    EDDY_FUNC_DEBUGSCOPE
-    return _model.num_linear_eq_constraints() +
-           _model.num_linear_ineq_constraints();
-  }
-
-public:
+  Clone(JEGA::Algorithms::GeneticAlgorithm& algorithm) const override;
 
   //! This constructor should be used.
   JegaEvaluator(JEGA::Algorithms::GeneticAlgorithm& algorithm, 
-                Dakota::Model& model);
+                Dakota::Model& true_model,
+		Dakota::Model& error_model);
 
   //! Copy constructor
   JegaEvaluator(const JegaEvaluator& copy);
@@ -108,9 +68,27 @@ public:
   //! Copy constructor w/ algorithm and model
   JegaEvaluator(const JegaEvaluator& copy, 
                 JEGA::Algorithms::GeneticAlgorithm& algorithm,
-                Dakota::Model& model);
+                Dakota::Model& true_model,
+		Dakota::Model& error_model);
 
   bool Evaluate(JEGA::Utilities::DesignGroup& group) override;
+
+  //! This Evaluate is overriden so that an error is raised.
+  //! According to JEGAOptimizer::Evaluator this function
+  //! is not compatible w/ DAKOTA's multi-level parallelism.
+  bool Evaluate(JEGA::Utilities::Design& des) override;
+
+protected:
+
+  //! Here we only deal w/ continuous design variables.
+  void SeparateVariables(const JEGA::Utilities::Design& from, 
+                         Dakota::RealVector& intoCont) const;
+
+  void RecordResponses(const Dakota::RealVector& from, 
+                       JEGA::Utilities::Design& into) const;
+
+  std::size_t GetNumberNonLinearConstraints() const;
+  std::size_t GetNumberLinearConstraints() const;
 
 private:
 

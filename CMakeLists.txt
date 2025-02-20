@@ -16,11 +16,6 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/install")
-
-set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib"
-  CACHE STRING "Set the RPATH in Dakota executables and libraries")
-
 # compiler flags (turn on most of the warnings, except unused variables and parameters
 list(APPEND MY_CXX_FLAGS "-Wall -Wextra -Wno-reorder")
 list(APPEND MY_CXX_FLAGS "-Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter")
@@ -41,66 +36,56 @@ add_custom_target(VersionHeader
   ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/version.cmake
 )
 
-# Variable used by dakota subdirectories to export libraries
-set(ExportTarget MyLibraryTargets CACHE STRING 
-  "Export set name for ${CMAKE_PROJECT_NAME}")
-
-#---------------------------------------------------------------------------------------------------------
+# -----------------------------
 # External packages required.
-#find_package(Boost 1.71 COMPONENTS filesystem REQUIRED)
 
-set(Dakota_CONFIG_DIR 
+# Temporary workaround: Dakota's build tree 
+# option is currently not functioning as expected.
+set(Dakota_BUILD_TREE
+    ON CACHE BOOL "Enable Dakota build tree model")
+
+set(Dakota_DIR 
     "$ENV{DAK_BUILD}/install/lib/cmake/Dakota/" 
     CACHE PATH "Path to the Dakota configuration directory.")
+find_package(Dakota REQUIRED PATHS ${Dakota_DIR} NO_DEFAULT_PATH)
 
-# build JEGA libraries
-# could not get this to work -- hard coding Targets.cmake
-##add_subdirectory(JEGA)
-##install(EXPORT ${ExportTarget}
-##  DESTINATION lib/cmake/MyLibrary)
-##include(${CMAKE_SOURCE_DIR}/install/lib/cmake/MyLibrary/MyLibraryTargets.cmake)
+if(Dakota_FOUND)
+	message(STATUS "Found Dakota: ${Dakota_CONFIG}")
+else()
+	message(FATAL_ERROR "ERROR: Could not find Dakota ...")
+endif()
 
-#file(GLOB DAK_LIBS "$ENV{DAK_BUILD}/install/lib/lib*.so")
-#file(GLOB DAK_TPL_LIBS "$ENV{DAK_BUILD}/install/bin/lib*.so")
-#include(${CMAKE_SOURCE_DIR}/MyLibraryTargets.cmake)
-
-#---------------------------------------------------------------------------------------------------------
-
+# -----------------------------
+# Version header
 ADD_CUSTOM_COMMAND(
     OUTPUT ${CMAKE_SOURCE_DIR}/version.h
            ${CMAKE_SOURCE_DIR}/_version.h
     COMMAND cmake -P
             ${CMAKE_SOURCE_DIR}/version.h)
 
-# link to dakota libraries
-link_directories($ENV{DAK_BUILD}/install/lib)
-
 # -----------------------------
 # add include and link directories 
 include_directories("${CMAKE_SOURCE_DIR}")
 include_directories("${Dakota_INCLUDE_DIRS}")
-#include_directories("$ENV{DAK_BUILD}/install/include")
-#include_directories("$ENV{DAK_SRC}/packages/external/JEGA/include")
-#include_directories("$ENV{DAK_SRC}/packages/external/JEGA/eddy")
+include_directories("${Dakota_TPL_INCLUDE_DIRS}")
 
+foreach(def ${Dakota_DEFINES})
+  add_definitions(-D${def})
+endforeach()
+
+# -----------------------------
+# add executable
 add_executable(adopt
 Main.cpp
+DakotaEnvironmentWrapper.cpp
 AdaptiveJegaOptimizer.cpp
 JegaDriver.cpp
 JegaEvaluatorCreator.cpp
 JegaEvaluator.cpp
 )
 
+# -----------------------------
 # link to libraries
 target_link_libraries(adopt ${Dakota_LIBRARIES})
-#target_link_libraries(adopt ${DAK_LIBS} ${DAK_TPL_LIBS})
-#target_link_libraries(adopt jega utilities jega_fe moga soga eutils)
-#target_link_libraries(adopt dakota_src)
-#target_link_libraries(adopt teuchoscomm teuchoscore teuchosnumerics teuchosparameterlist teuchosparser teuchosremainder)
-#target_link_libraries(adopt pebbl pecos_src pecos_util nomad)
-#target_link_libraries(adopt ${DAK_TPL_LIBS})
-## unneccessary but required
-#target_link_libraries(adopt dakota_dll_api dakota_src_fortran dakota_util ddace dfftpack dream interfaces ncsuopt nidr optpp
-#tinyxml utilib) 
-
+target_link_libraries(adopt ${Dakota_TPL_LIBRARIES})
 add_dependencies(adopt VersionHeader)

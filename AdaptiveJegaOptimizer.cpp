@@ -1,5 +1,45 @@
 #include<AdaptiveJegaOptimizer.h>
 
+// JEGAConfig.hpp should be the first include in all JEGA files.
+#include<../Utilities/include/JEGAConfig.hpp>
+#include<../Utilities/include/Logging.hpp>
+
+// Standard includes.
+
+// JEGA core includes.
+#include<GeneticAlgorithm.hpp>
+#include<GeneticAlgorithmEvaluator.hpp>
+#include<GeneticAlgorithmInitializer.hpp>
+#include<OperatorGroups/AllOperators.hpp>
+
+// SOGA-specific API
+#include<../SOGA/include/SOGA.hpp>
+
+// JEGA front end includes.
+#include<../FrontEnd/Core/include/Driver.hpp>
+#include<../FrontEnd/Core/include/ProblemConfig.hpp>
+#include<../FrontEnd/Core/include/AlgorithmConfig.hpp>
+#include<../FrontEnd/Core/include/EvaluatorCreator.hpp>
+
+// Dakota includes.
+#include<ProblemDescDB.hpp>
+#include<MarginalsCorrDistribution.hpp>
+#include<model_utils.hpp>
+
+// Eddy utility includes.
+#include <utilities/include/EDDY_DebugScope.hpp>
+
+// JEGA utility includes.
+#include <../Utilities/include/DesignGroup.hpp>
+#include <../Utilities/include/ConstraintInfo.hpp>
+#include <../Utilities/include/ParameterExtractor.hpp>
+#include <../Utilities/include/BasicParameterDatabaseImpl.hpp>
+#include <../Utilities/include/MultiObjectiveStatistician.hpp>
+#include <../Utilities/include/SingleObjectiveStatistician.hpp>
+
+#include <algorithm>
+#include <sstream>
+
 using namespace std;
 using namespace Dakota;
 using namespace JEGA::Logging;
@@ -22,8 +62,10 @@ string asstring(const T& val)
 //-----------------------------------------------------------------------------
 
 
-AdaptiveJegaOptimizer::AdaptiveJegaOptimizer(ProblemDescDB &prob_db, Model &model)
-                     : Optimizer(prob_db, model, 
+AdaptiveJegaOptimizer::AdaptiveJegaOptimizer(ProblemDescDB &prob_db, 
+                                             shared_ptr<Model> true_model, 
+					     shared_ptr<Model> error_model)
+                     : Optimizer(prob_db, true_model, /*propagate the true model to Dakota*/
                                  std::shared_ptr<AdaptiveJegaTraits>(
                                  new AdaptiveJegaTraits())),
                        param_db(nullptr), eval_creator(nullptr)
@@ -32,14 +74,16 @@ AdaptiveJegaOptimizer::AdaptiveJegaOptimizer(ProblemDescDB &prob_db, Model &mode
   EDDY_FUNC_DEBUGSCOPE
 
   //! Exit if AdaptiveJega was called with moga.
-  if(methodName == MOGA) {
-    JEGALOG_II_G(this, text_entry(lfatal(), "Adaptive JEGA Error: Multi-objective "
-                                            "optimization currently not supported."))
+  if(methodName == Dakota::MOGA) {
+    JEGALOG_II_G(lfatal(), this, text_entry(lfatal(), 
+                 "Adaptive JEGA Error: Multi-objective "
+                 "optimization currently not supported."))
   }
-  else if(methodName != SOGA) {
-    JEGALOG_II_G(this, text_entry(lfatal(), "Adaptive JEGA Error: \"" + 
-                                            method_enum_to_string(methodName) + 
-                                            "\" is an invalid method specification."))
+  else if(methodName != Dakota::SOGA) {
+    JEGALOG_II_G(lfatal(), this, text_entry(lfatal(), 
+                 "Adaptive JEGA Error: \"" + 
+                 method_enum_to_string(methodName) + 
+                 "\" is an invalid method specification."))
   }
 
   //! Initialize JEGA using the Front End Driver.
@@ -77,18 +121,27 @@ AdaptiveJegaOptimizer::AdaptiveJegaOptimizer(ProblemDescDB &prob_db, Model &mode
       text_entry(lfatal(), "JEGAOptimizer Error: Unable to initialize JEGA")
       );
 
-  LoadParameters();
+  LoadParameterDatabase();
 
   // population_size is extracted by JEGA in
   // GeneticAlgorithmInitializer::PollForParameters(), but it is
   // also needed here to specify the algorithmic concurrency.  Note
   // that the JEGA population size may grow or shrink during its
   // iterations, so this is only an initial estimate.
-  int pop_size = this->prob_db.get_int("method.population_size");
-  maxEvalConcurrency = *= pop_size;
+  int pop_size = prob_db.get_int("method.population_size");
+  maxEvalConcurrency *= pop_size;
 
-  eval_creator = new JegaEvaluator(*iteratedModel);
+  // iteratedModel is the true_model set internally by DakotaOptimizer
+  eval_creator = make_shared<JegaEvaluatorCreator>(*iteratedModel, *error_model);
   
+}
+
+//-----------------------------------------------------------------------------
+
+//! Smart pointers deleted automatically
+AdaptiveJegaOptimizer::~AdaptiveJegaOptimizer()
+{
+
 }
 
 //-----------------------------------------------------------------------------
@@ -182,9 +235,13 @@ void AdaptiveJegaOptimizer::LoadParameterDatabase()
 {
   EDDY_FUNC_DEBUGSCOPE
 
+  ProblemDescDB &prob_db = probDescDB;
+
   // create a new parameter database
-  if(param_db) delete param_db
-  param_db = new BasicParameterDatabaseImpl();
+  if(param_db) param_db.reset();
+  param_db = shared_ptr<BasicParameterDatabaseImpl>(
+    new BasicParameterDatabaseImpl()		  
+  );
 
   // Duplicate in all the integral parameters.
   const int& random_seed = prob_db.get_int("method.random_seed");
@@ -286,10 +343,11 @@ void AdaptiveJegaOptimizer::LoadParameterDatabase()
   const string& selector = prob_db.get_string("method.replacement_type");
   if (selector != "")
     param_db->AddStringParam("method.replacement_type", selector);
-  else if (methodName == SOGA)
+  else if (methodName == Dakota::SOGA)
     param_db->AddStringParam("method.replacement_type", "elitist");
-  else if (this->methodName == MOGA) {
-    JEGALOG_II_G(this, text_entry(lfatal(), "Adaptive JEGA Error: Multi-objective "
+  else if (methodName == Dakota::MOGA) {
+    JEGALOG_II_G(lfatal(), this, text_entry(lfatal(), 
+                 "Adaptive JEGA Error: Multi-objective "
                  "optimization currently not supported."))
   }
   
@@ -306,10 +364,11 @@ void AdaptiveJegaOptimizer::LoadParameterDatabase()
   else {
     if (fitness != "")
       param_db->AddStringParam("method.fitness_type", fitness);
-    else if (methodName == SOGA)
+    else if (methodName == Dakota::SOGA)
       param_db->AddStringParam("method.fitness_type", "merit_function");
-    else if (methodName == MOGA) {
-      JEGALOG_II_G(this, text_entry(lfatal(), "Adaptive JEGA Error: Multi-objective "
+    else if (methodName == Dakota::MOGA) {
+      JEGALOG_II_G(lfatal(), this, text_entry(lfatal(), 
+                   "Adaptive JEGA Error: Multi-objective "
                    "optimization currently not supported."))
     }
   }
@@ -357,10 +416,11 @@ void AdaptiveJegaOptimizer::LoadParameterDatabase()
 
   if (convergence_operator != "")
     param_db->AddStringParam("method.jega.convergence_type", convergence_operator);
-  else if (this->methodName == SOGA)
+  else if (this->methodName == Dakota::SOGA)
     param_db->AddStringParam("method.jega.convergence_type", "average_fitness_tracker");
-  else if (this->methodName == MOGA) {
-    JEGALOG_II_G(this, text_entry(lfatal(), "Adaptive JEGA Error: Multi-objective "
+  else if (this->methodName == Dakota::MOGA) {
+    JEGALOG_II_G(lfatal(), this, text_entry(lfatal(), 
+                 "Adaptive JEGA Error: Multi-objective "
                  "optimization currently not supported."))
   }
 
@@ -403,10 +463,11 @@ AdaptiveJegaOptimizer::LoadAlgorithmConfig(AlgorithmConfig &config)
   // based on the methodName base class variable.
   AlgorithmConfig::AlgType alg_type;
   
-  if(methodName == MOGA)
-    JEGALOG_II_G(this, text_entry(lfatal(), "Adaptive JEGA Error: Multi-objective "
+  if(methodName == Dakota::MOGA)
+    JEGALOG_II_G(lfatal(), this, text_entry(lfatal(), 
+                 "Adaptive JEGA Error: Multi-objective "
                  "optimization currently not supported."))
-  else if(methodName == SOGA)
+  else if(methodName == Dakota::SOGA)
     alg_type = AlgorithmConfig::SOGA;
   else
       JEGALOG_II_G_F(this, text_entry(lfatal(), "Adaptive JEGA Error: \"" +
@@ -442,7 +503,7 @@ AdaptiveJegaOptimizer::LoadDesignVariables(ProblemConfig &config)
 {
   EDDY_FUNC_DEBUGSCOPE
 
-  Model &iterated_model = iteratedModel;
+  Model &iterated_model = *iteratedModel;
 
   // Currently, we only deal with continuous real design variables.
   // To simply the implementation we only load continuous real variables
@@ -464,10 +525,11 @@ AdaptiveJegaOptimizer::LoadDesignVariables(ProblemConfig &config)
                    "supported.\n"))
   }
 
-  const RealVector& clbs = iterated_model.continuous_lower_bounds();
-  const RealVector& cubs = iterated_model.continuous_upper_bounds();
-  StringMultiArrayConstView clabels = iterated_model.continuous_variable_labels();
-  for(i=0; i<numContinuousVars; ++i)
+  const RealVector& clbs = ModelUtils::continuous_lower_bounds(iterated_model);
+  const RealVector& cubs = ModelUtils::continuous_upper_bounds(iterated_model);
+  StringMultiArrayConstView clabels = 
+    iterated_model.current_variables().continuous_variable_labels();
+  for(int i=0; i<numContinuousVars; ++i)
     config.AddContinuumRealVariable(clabels[i], clbs[i], cubs[i], 6);
   
   // Now make sure that an info was created for each variable.
@@ -482,7 +544,7 @@ AdaptiveJegaOptimizer::LoadObjectiveFunctions(ProblemConfig &config)
 {
   EDDY_FUNC_DEBUGSCOPE
   
-  Model &iterated_model = iteratedModel;
+  Model &iterated_model = *iteratedModel;
 
   if(numObjectiveFns > 1) {
     JEGALOG_II_G_F(this, text_entry(lfatal(), "Adaptive JEGA Error: "
@@ -494,7 +556,7 @@ AdaptiveJegaOptimizer::LoadObjectiveFunctions(ProblemConfig &config)
   // Dakota will soon support mixed extremization schemes.
   // Dakota does not support labeling objectives.  Until it does,
   // we will create a label that looks like "Nature Type Index".
-  const StringArray&  labels = iterated_model.response_labels();
+  const StringArray&  labels = ModelUtils::response_labels(iterated_model);
   const BoolDeque& max_sense = iterated_model.primary_response_fn_sense();
   bool use_sense = !max_sense.empty();
   for(size_t i=0; i<numObjectiveFns; ++i)
@@ -518,7 +580,7 @@ AdaptiveJegaOptimizer::LoadConstraints(ProblemConfig &config)
   // is contained in the data structures of the base classes.
   // In particular, the Model (iteratedModel) has most of the
   // info. 
-  const Model &m = iteratedModel;
+  const Model &m = *iteratedModel;
   
   /**************************************************************************
   
@@ -537,9 +599,9 @@ AdaptiveJegaOptimizer::LoadConstraints(ProblemConfig &config)
   // functions, Dakota does not allow labeling of constraints.
   // we will create a label that looks like "Nature Type Index".
   const RealVector& nln_ineq_lwr_bnds = 
-    m.nonlinear_ineq_constraint_lower_bounds();
+    ModelUtils::nonlinear_ineq_constraint_lower_bounds(m);
   const RealVector& nln_ineq_upr_bnds =
-    m.nonlinear_ineq_constraint_upper_bounds();
+    ModelUtils::nonlinear_ineq_constraint_upper_bounds(m);
 
 //PDH: Dakota nonlinear constraints to JEGA nonlinear constraints.
 //     Don't know what the JEGA data structure is.  These are all
@@ -557,7 +619,8 @@ AdaptiveJegaOptimizer::LoadConstraints(ProblemConfig &config)
   
   // now do non-linear equality constraints.  The information we need for
   // these is in nonlinear_eq_constraint_targets.
-  const RealVector& nln_eq_targets = m.nonlinear_eq_constraint_targets();
+  const RealVector& nln_eq_targets = 
+    ModelUtils::nonlinear_eq_constraint_targets(m);
   for(size_t i=0; i<numNonlinearEqConstraints; ++i)
     config.AddNonlinearEqualityConstraint("Non-Linear Equality " + asstring(i),
                                           nln_eq_targets[i]);
@@ -574,11 +637,11 @@ AdaptiveJegaOptimizer::LoadConstraints(ProblemConfig &config)
   // In addition to bounds, these accept coefficients for possible shortcut
   // evaluation.  That information is in linear_ineq_constraint_coeffs.
   const RealVector& lin_ineq_lwr_bnds
-      = m.linear_ineq_constraint_lower_bounds();
+      = ModelUtils::linear_ineq_constraint_lower_bounds(m);
   const RealVector& lin_ineq_upr_bnds
-      = m.linear_ineq_constraint_upper_bounds();
+      = ModelUtils::linear_ineq_constraint_upper_bounds(m);
   const RealMatrix& lin_ineq_coeffs
-      = m.linear_ineq_constraint_coeffs();
+      = ModelUtils::linear_ineq_constraint_coeffs(m);
   
   JEGA::DoubleVector lin_ineq_coeffs_row(lin_ineq_coeffs.numCols());
 
@@ -600,8 +663,8 @@ AdaptiveJegaOptimizer::LoadConstraints(ProblemConfig &config)
   // is in lin_eq_targets. In addition to targets, these accept coefficients
   // for possible shortcut evaluation.  That information is in
   // linear_eq_constraint_coeffs.
-  const RealVector& lin_eq_targets = m.linear_eq_constraint_targets();
-  const RealMatrix& lin_eq_coeffs = m.linear_eq_constraint_coeffs();
+  const RealVector& lin_eq_targets = ModelUtils::linear_eq_constraint_targets(m);
+  const RealMatrix& lin_eq_coeffs = ModelUtils::linear_eq_constraint_coeffs(m);
 
   JEGA::DoubleVector lin_eq_coeffs_row(lin_eq_coeffs.numCols());
 
@@ -628,8 +691,9 @@ AdaptiveJegaOptimizer::LoadConstraints(ProblemConfig &config)
 
 //! Copied from JEGAOptimizer::GetBestSOSolutions()
 void
-AdaptiveJegaOptimizer::GetBestSOSolutions(DesignOFSortSet &from, GeneticAlgorithm &ga,
-                                          multimap<RealRealPair, Design*> &bests)
+AdaptiveJegaOptimizer::GetBestSOSolutions(const DesignOFSortSet &from, 
+                                          const GeneticAlgorithm &ga,
+                                          multimap<RealRealPair, Design*> &designSortMap)
 {
 
   EDDY_FUNC_DEBUGSCOPE
@@ -649,9 +713,9 @@ AdaptiveJegaOptimizer::GetBestSOSolutions(DesignOFSortSet &from, GeneticAlgorith
   // the GA to ensure solver/final results consistency
   JEGA::DoubleVector weights;
   try {
-    const JEGA::Algorithms::SOGA& the_ga = 
-      dynamic_cast<const JEGA::Algorithms::SOGA&>(theGA);
-    weights = the_ga.GetWeights();
+    const JEGA::Algorithms::SOGA& ga = 
+      dynamic_cast<const JEGA::Algorithms::SOGA&>(ga);
+    weights = ga.GetWeights();
   } catch(const std::bad_cast& bc_except) {
     Cerr << "\nError: could not cast GeneticAlgorithm to SOGA; exception:\n" 
          << bc_except.what() << std::endl;
@@ -701,7 +765,8 @@ AdaptiveJegaOptimizer::GetBestSOSolutions(DesignOFSortSet &from, GeneticAlgorith
 
 //! Copied from JEGAOptimizer::LoadDakotaResponses()
 void
-AdaptiveJegaOptimizer::LoadDakotaResponses(Design &from, Variables &vars, Response &resp)
+AdaptiveJegaOptimizer::LoadDakotaResponses(const Design &from, Variables &vars, 
+                                           Response &resp) const
 {
 
     RealVector c_vars(numContinuousVars);
