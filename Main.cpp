@@ -1,4 +1,3 @@
-#include<version.h>
 #include<cassert>
 #include<string>
 

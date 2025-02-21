@@ -28,15 +28,6 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g3")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 # -----------------------------
-# for version control
-# Add a custom command that produces version.cpp, plus
-# a dummy output that's not actually produced, in order
-# to force version.cmake to always be re-run before the build
-add_custom_target(VersionHeader
-  ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/version.cmake
-)
-
-# -----------------------------
 # External packages required.
 
 # Temporary workaround: Dakota's build tree 
@@ -54,14 +45,6 @@ if(Dakota_FOUND)
 else()
 	message(FATAL_ERROR "ERROR: Could not find Dakota ...")
 endif()
-
-# -----------------------------
-# Version header
-ADD_CUSTOM_COMMAND(
-    OUTPUT ${CMAKE_SOURCE_DIR}/version.h
-           ${CMAKE_SOURCE_DIR}/_version.h
-    COMMAND cmake -P
-            ${CMAKE_SOURCE_DIR}/version.h)
 
 # -----------------------------
 # add include and link directories 
@@ -88,4 +71,3 @@ JegaEvaluator.cpp
 # link to libraries
 target_link_libraries(adopt ${Dakota_LIBRARIES})
 target_link_libraries(adopt ${Dakota_TPL_LIBRARIES})
-add_dependencies(adopt VersionHeader)
