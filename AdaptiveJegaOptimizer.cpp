@@ -424,6 +424,10 @@ void AdaptiveJegaOptimizer::LoadParameterDatabase()
                  "optimization currently not supported."))
   }
 
+  //!AN: This is required by JEGA
+  param_db->AddStringParam("method.jega.niching_type",
+                           prob_db.get_string("method.jega.niching_type"));
+
   param_db->AddStringParam("method.jega.postprocessor_type",
                            prob_db.get_string("method.jega.postprocessor_type"));
 
@@ -431,6 +435,37 @@ void AdaptiveJegaOptimizer::LoadParameterDatabase()
   // are using the flat file initializer but the initializer is going to
   // be looking for one if it is in use.
   param_db->AddStringParam("method.jega.initializer_delimiter", "");
+
+  // now get all vector of doubles.
+  const RealVector *dak_rv = &prob_db.get_rv("method.jega.niche_vector");
+
+  JEGA::DoubleVector niche_vector(dak_rv->values(), 
+                                  dak_rv->values() + dak_rv->length());
+
+  param_db->AddDoubleVectorParam("method.jega.niche_vector",
+                                 niche_vector);
+
+  dak_rv = &prob_db.get_rv("method.jega.distance_vector");
+  JEGA::DoubleVector distance_vector(dak_rv->values(),
+                                     dak_rv->values() + dak_rv->length());
+
+  param_db->AddDoubleVectorParam("method.jega.distance_vector", distance_vector);
+ 
+  // when recasting is active, the weights may be transformed; get off Model
+  dak_rv = &iteratedModel->primary_response_fn_weights();
+  JEGA::DoubleVector mow_vector(dak_rv->values(), 
+                                dak_rv->values() + dak_rv->length());
+
+  param_db->AddDoubleVectorParam("responses.multi_objective_weights",
+                                 mow_vector);
+
+  // Dakota does not expose a capability to enter multiple flat file names
+  // as a vector (can delimit them in the single string and JEGA will parse
+  // them).  We will add an empty vector to prevent the warning from JEGA.
+  param_db->AddStringVectorParam("method.flat_files", 
+                                 std::vector<std::string>());
+
+
 
   // now get all int vector params.
   // nothing to do here.

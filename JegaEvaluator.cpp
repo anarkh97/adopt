@@ -184,6 +184,9 @@ bool
 JegaEvaluator::Evaluate(DesignGroup &group)
 {
 // TODO: This is where Dakota Model is called which launches simulations.
+
+  Cout << "Evaluate not implemented. Exiting.\n";
+  abort_handler(METHOD_ERROR);
 }
 
 //-----------------------------------------------------------------------------
