@@ -43,13 +43,13 @@ void DakotaEnvironmentWrapper::SetupAdaptiveOptimizer()
   // reset the model to our model if top method is soga
   String top_method_name = topLevelIterator.method_string();
 
-  if(top_method_name == "soga") {
+  // calling it here explicitly to make things clear and readable.
+  ProblemDescDB &problem_db = problem_description_db();
+  shared_ptr<Model> top_model = topLevelIterator.iterated_model();
 
-    // calling it here explicitly to make things clear and readable.
-    ProblemDescDB &problem_db = problem_description_db();
+  const String& top_model_type = top_model->model_type();
 
-    shared_ptr<Model> top_model = 
-      topLevelIterator.iterated_model();
+  if(top_method_name == "soga" and top_model_type == "simulation") {
 
     // ProblemDescDB::set does not allow tinkering of analysis
     // drivers. So, we simply create a new Model with the same
