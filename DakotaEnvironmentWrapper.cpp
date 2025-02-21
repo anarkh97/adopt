@@ -48,24 +48,6 @@ void DakotaEnvironmentWrapper::SetupAdaptiveOptimizer()
     // calling it here explicitly to make things clear and readable.
     ProblemDescDB &problem_db = problem_description_db();
 
-    // get all the available models
-/*
-    ModelList &models = problem_db.model_list();
-    for(auto &m : models) {
-
-      const String &m_id     = m->model_id();
-      const String &m_type   = m->model_type();
-      const String &m_source = m->method_source();
-
-      Cout << "Found Model with\n"
-           << "ID: " << m_id << std::endl
-	   << "Type: " << m_type << std::endl
-	   << "Source: " << m_source << std::endl;
-    }
-
-    abort_handler(-1);
-*/
-
     shared_ptr<Model> top_model = 
       topLevelIterator.iterated_model();
 
@@ -73,31 +55,63 @@ void DakotaEnvironmentWrapper::SetupAdaptiveOptimizer()
     // drivers. So, we simply create a new Model with the same
     // interface. We handle different kinds of evaluations 
     // in the driver through STATE variables.
-
-    shared_ptr<Model> err_model =
-      ModelUtils::get_model(problem_db);
+    // check if a string set of state variables was defined.
 /*
-    // print drivers to verify --- they should be the same.
-    Interface &true_interface = top_model->derived_interface();
-    Interface &esti_interface = err_model->derived_interface();
+    StringSetArray string_sets = ModelUtils::discrete_set_string_values(
+      *top_model, Dakota::MIXED_STATE);
 
-    for(auto &driver : true_interface.analysis_drivers()) 
-      Cout << "True driver: " << driver << std::endl;
-    
-    for(auto &driver : esti_interface.analysis_drivers())
-      Cout << "Esti driver: " << driver << std::endl;
+    bool perform_adaptive_optimization = false;
 
-    abort_handler(-1);
+    if(!string_sets.empty()) {
+
+      // We are looking for a string set whose permissible values are
+      // "TRUE", "INTERP", and "ERROR".
+      int num_matches = 0;
+      for(auto &sets : string_sets) {
+        if(sets.size() > 3) continue;
+
+	for(auto &val : sets)
+          if(val == "TRUE" or val == "INTERP" or val == "ERROR")
+            num_matches++;
+      }
+
+      // we found all three keyword, so we assume that the user
+      // wants to perform our adaptive optimization.
+      perform_adaptive_optimization = true;
+
+    }
 */
 
-    // add continuous state set variables w/ permissible values
-    // TRUE, INTERP, ERROR
+    bool perform_adaptive_optimization = false;
+    StringMultiArrayConstView disc_string_labels =
+      ModelUtils::all_discrete_string_variable_labels(
+        *top_model);
 
+    for(const auto &label : disc_string_labels) {
+      if(label == "SWITCH") 
+        perform_adaptive_optimization = true;
+    }
 
-    // assign our optimizer.
-    topLevelIterator.assign_rep(
-      make_shared<AdaptiveJegaOptimizer>(problem_db, top_model, err_model));
+    if(perform_adaptive_optimization) {
 
+      // get the communicator attached to environment
+      ParallelLibrary &parallel_lib = parallel_library();
+      ParLevLIter w_pl_iter = parallel_lib.w_parallel_level_iterator();
+
+      Cout << "\n";
+      Cout << "----------------------------\n";
+      Cout << "--        SOGA-Ad.        --\n";
+      Cout << "----------------------------\n";
+
+      shared_ptr<Model> err_model =
+        ModelUtils::get_model(problem_db);
+
+      // assign our optimizer.
+      topLevelIterator.assign_rep(
+        make_shared<AdaptiveJegaOptimizer>(problem_db, top_model, err_model));
+      topLevelIterator.init_communicators(w_pl_iter);
+
+    }
   }
 
 }
