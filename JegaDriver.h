@@ -23,6 +23,14 @@
 // Include the main optimizer class to get Model and other dakota things.
 #include<DakotaOptimizer.hpp>
 
+/************************************************
+ * JegaDriver is the core GA optimization driver 
+ * class, managing the execution of optimization 
+ * iterations. Here we implement a simple wrapper
+ * for JEGA::FrontEnd::Driver and add our 
+ * adaptive decision maker.
+ ***********************************************/
+
 class JegaDriver : public JEGA::FrontEnd::Driver {
 
 public:

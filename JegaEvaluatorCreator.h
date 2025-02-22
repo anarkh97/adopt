@@ -11,6 +11,14 @@
 // Include the main optimizer class to get Model and other dakota things.
 #include<DakotaOptimizer.hpp>
 
+/************************************************
+ * JegaEvaluatorCreator is a utility class that 
+ * recieves the true_model and error_model from 
+ * the AdaptiveJegaOptimizer and passes them to 
+ * the Evaluator class. This is the standard
+ * procedure required by JEGA::FrontEnd.
+ ***********************************************/
+
 class JegaEvaluatorCreator : public JEGA::FrontEnd::EvaluatorCreator {
 
   Dakota::Model &true_model;

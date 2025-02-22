@@ -8,17 +8,17 @@
 
 /*****************************************************
  *  This class extends JEGAOptimizer, Dakota's 
- *  implementation of John Eddy's Genetic 
- *  Algorithm (JEGA) library. We modify its optimization 
- *  loop to integrate an Adaptive Decision Model based 
- *  on Gaussian Process. This model predicts whether 
+ *  implementation of John Eddy's Genetic Algorithm 
+ *  (JEGA) library. We modify its optimization loop to 
+ *  integrate an Adaptive Decision Model based on 
+ *  Gaussian Process. This model predicts whether 
  *  high-fidelity fluid dynamics simulations (M2C) are 
  *  necessary or if simpler interpolation estimates 
- *  (FEST) will suffice. Note that JEGAOptimizer's 
+ *  (FEST) will suffice. Note that Dakota::JEGAOptimizer's 
  *  Evaluator, Driver, and EvaluatorCreator classes 
- *  and ParameterDatabase variables are private and 
- *  inaccessible here. Hence, we do not directly derive 
- *  from JEGAOptimizer but refactor most of its 
+ *  along with ParameterDatabase variables are private 
+ *  and inaccessible here. Hence, we do not directly 
+ *  derive from JEGAOptimizer but refactor most of its 
  *  functionality.
  *****************************************************/
 
@@ -55,7 +55,7 @@ private:
   void LoadConstraints(JEGA::FrontEnd::ProblemConfig& config);
 
   //! Dakota related methods
-
+  //! MOGA functionality has been removed for now.
   void GetBestSOSolutions(const JEGA::Utilities::DesignOFSortSet& from,
                           const JEGA::Algorithms::GeneticAlgorithm& ga,
 			  std::multimap<Dakota::RealRealPair, JEGA::Utilities::Design*>&);

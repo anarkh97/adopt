@@ -12,14 +12,17 @@
 int main(int argc, char* argv[])
 {
 
-  // whether dakota running in parallel (e.g. mpiexec dakota -i dakota.in)
+  //! whether dakota running in parallel (e.g. mpiexec adopt -i adopt.in)
   bool parallel = Dakota::MPIManager::detect_parallel_launch(argc, argv);
   
-  // Define MPI_DEBUG in dakota_global_defs.cpp to cause a hold here
+  //! Define MPI_DEBUG in dakota_global_defs.cpp to cause a hold here
   Dakota::mpi_debug_hold();
 
 #ifdef DAKOTA_HAVE_MPI
-  //AN: Stop execution in case someone tries mpiexec adopt.
+  //! AN: Stop execution in case someone tries mpiexec adopt.
+  //! AN: Currently, we are assuming Dakota's operations are cheap
+  //! compared to the function evaluations (i.e., simulations).
+  //! Consequently, Dakota can be on one processor.
   if (parallel) {
     //MPI_Init(&argc, &argv); // initialize MPI
     Cerr << "***Error: ADOPT is not configured to run with "
@@ -29,14 +32,14 @@ int main(int argc, char* argv[])
   }
 #endif // DAKOTA_HAVE_MPI
   
-  // Parse command line through Dakota
-  // Note that we are assuming that we are on the root rank.
+  //! Parse command line through Dakota
+  //! Note that we are assuming that we are on the root rank.
   Dakota::ProgramOptions opts(argc, argv, 0);
 
-  // Create the Library environment which sets the Data containers
+  //! Create the Library environment which sets the Data containers
   DakotaEnvironmentWrapper env(opts);
 
-  // Perform whatever study was requested.
+  //! Perform whatever study was requested.
   env.execute();
 
 #ifdef DAKOTA_HAVE_MPI
