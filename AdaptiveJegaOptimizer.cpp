@@ -63,9 +63,9 @@ string asstring(const T& val)
 
 
 AdaptiveJegaOptimizer::AdaptiveJegaOptimizer(ProblemDescDB &prob_db, 
-                                             shared_ptr<Model> true_model, 
+                                             shared_ptr<Model> sim_model, 
 					     shared_ptr<Model> error_model)
-                     : Optimizer(prob_db, true_model, /*propagate the true model to Dakota*/
+                     : Optimizer(prob_db, sim_model, /*propagate the true model to Dakota*/
                                  std::shared_ptr<AdaptiveJegaTraits>(
                                  new AdaptiveJegaTraits())),
                        param_db(nullptr), eval_creator(nullptr)
@@ -131,7 +131,7 @@ AdaptiveJegaOptimizer::AdaptiveJegaOptimizer(ProblemDescDB &prob_db,
   int pop_size = prob_db.get_int("method.population_size");
   maxEvalConcurrency *= pop_size;
 
-  // iteratedModel is the true_model set internally by DakotaOptimizer
+  // iteratedModel is the sim_model set internally by DakotaOptimizer
   eval_creator = make_shared<JegaEvaluatorCreator>(*iteratedModel, *error_model);
   
 }

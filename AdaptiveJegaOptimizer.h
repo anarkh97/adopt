@@ -32,7 +32,7 @@ public:
 
   //! Default constructor
   AdaptiveJegaOptimizer(Dakota::ProblemDescDB& prob_db, 
-                        std::shared_ptr<Dakota::Model> true_model,
+                        std::shared_ptr<Dakota::Model> sim_model,
 			std::shared_ptr<Dakota::Model> error_model);
 
   //! Default Destructor -- Calls ~Optimizer automatically

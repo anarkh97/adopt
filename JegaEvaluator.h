@@ -28,7 +28,7 @@ class JegaEvaluator : public JEGA::Algorithms::GeneticAlgorithmEvaluator {
 
 private:
 
-  Dakota::Model& true_model;
+  Dakota::Model& sim_model;
   Dakota::Model& error_model;
 
 public:
@@ -59,7 +59,7 @@ public:
 
   //! This constructor should be used.
   JegaEvaluator(JEGA::Algorithms::GeneticAlgorithm& algorithm, 
-                Dakota::Model& true_model,
+                Dakota::Model& sim_model,
 		Dakota::Model& error_model);
 
   //! Copy constructor
@@ -68,7 +68,7 @@ public:
   //! Copy constructor w/ algorithm and model
   JegaEvaluator(const JegaEvaluator& copy, 
                 JEGA::Algorithms::GeneticAlgorithm& algorithm,
-                Dakota::Model& true_model,
+                Dakota::Model& sim_model,
 		Dakota::Model& error_model);
 
   bool Evaluate(JEGA::Utilities::DesignGroup& group) override;
@@ -82,7 +82,13 @@ protected:
 
   //! Here we only deal w/ continuous design variables.
   void SeparateVariables(const JEGA::Utilities::Design& from, 
-                         Dakota::RealVector& intoCont) const;
+                         Dakota::RealVector& into_cont) const;
+
+  void SetStateVariables(const JEGA::Utilities::Design& from,
+                         Dakota::IntVector& into_disc_int,
+			 Dakota::StringMultiArray& into_disc_string,
+			 const bool error_flag=false) const;
+
 
   void RecordResponses(const Dakota::RealVector& from, 
                        JEGA::Utilities::Design& into) const;

@@ -13,7 +13,7 @@
 
 /************************************************
  * JegaEvaluatorCreator is a utility class that 
- * recieves the true_model and error_model from 
+ * recieves the sim_model and error_model from 
  * the AdaptiveJegaOptimizer and passes them to 
  * the Evaluator class. This is the standard
  * procedure required by JEGA::FrontEnd.
@@ -21,13 +21,13 @@
 
 class JegaEvaluatorCreator : public JEGA::FrontEnd::EvaluatorCreator {
 
-  Dakota::Model &true_model;
+  Dakota::Model &sim_model;
   Dakota::Model &error_model;
 
 public:
 
   //! Constructor
-  JegaEvaluatorCreator(Dakota::Model& true_model, Dakota::Model& error_model); 
+  JegaEvaluatorCreator(Dakota::Model& sim_model, Dakota::Model& error_model); 
 
   //! Destructor
   ~JegaEvaluatorCreator() { };

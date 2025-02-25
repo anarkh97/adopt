@@ -19,7 +19,7 @@ using namespace JEGA::Algorithms;
 
 JegaEvaluator::JegaEvaluator(GeneticAlgorithm &algorithm, Model &tmodel_, 
                              Model &emodel_)
-             : GeneticAlgorithmEvaluator(algorithm), true_model(tmodel_), 
+             : GeneticAlgorithmEvaluator(algorithm), sim_model(tmodel_), 
                error_model(emodel_)
 {
   EDDY_FUNC_DEBUGSCOPE
@@ -28,7 +28,7 @@ JegaEvaluator::JegaEvaluator(GeneticAlgorithm &algorithm, Model &tmodel_,
 //-----------------------------------------------------------------------------
 
 JegaEvaluator::JegaEvaluator(const JegaEvaluator &copy)
-             : GeneticAlgorithmEvaluator(copy), true_model(copy.true_model),
+             : GeneticAlgorithmEvaluator(copy), sim_model(copy.sim_model),
                error_model(copy.error_model)
 {
   EDDY_FUNC_DEBUGSCOPE
@@ -38,7 +38,7 @@ JegaEvaluator::JegaEvaluator(const JegaEvaluator &copy)
 
 JegaEvaluator::JegaEvaluator(const JegaEvaluator &copy, GeneticAlgorithm &algo,
                              Model &tmodel_, Model &emodel_)
-             : GeneticAlgorithmEvaluator(copy, algo), true_model(tmodel_),
+             : GeneticAlgorithmEvaluator(copy, algo), sim_model(tmodel_),
                error_model(emodel_)
 {
   EDDY_FUNC_DEBUGSCOPE
@@ -77,7 +77,7 @@ GeneticAlgorithmOperator*
 JegaEvaluator::Clone(GeneticAlgorithm &algorithm) const
 {
   EDDY_FUNC_DEBUGSCOPE
-  return new JegaEvaluator(*this, algorithm, true_model, error_model);
+  return new JegaEvaluator(*this, algorithm, sim_model, error_model);
 }
 
 //-----------------------------------------------------------------------------
@@ -85,8 +85,8 @@ JegaEvaluator::Clone(GeneticAlgorithm &algorithm) const
 size_t JegaEvaluator::GetNumberNonLinearConstraints() const
 {
   EDDY_FUNC_DEBUGSCOPE
-  return ModelUtils::num_nonlinear_eq_constraints(true_model) +
-         ModelUtils::num_nonlinear_ineq_constraints(true_model);
+  return ModelUtils::num_nonlinear_eq_constraints(sim_model) +
+         ModelUtils::num_nonlinear_ineq_constraints(sim_model);
 }
 
 //-----------------------------------------------------------------------------
@@ -94,8 +94,8 @@ size_t JegaEvaluator::GetNumberNonLinearConstraints() const
 size_t JegaEvaluator::GetNumberLinearConstraints() const
 {
   EDDY_FUNC_DEBUGSCOPE
-  return ModelUtils::num_linear_eq_constraints(true_model) +
-         ModelUtils::num_linear_ineq_constraints(true_model);
+  return ModelUtils::num_linear_eq_constraints(sim_model) +
+         ModelUtils::num_linear_ineq_constraints(sim_model);
 }
 
 //-----------------------------------------------------------------------------
@@ -106,10 +106,10 @@ JegaEvaluator::SeparateVariables(const Design &from, RealVector &into_cont) cons
 
   EDDY_FUNC_DEBUGSCOPE
 
-  size_t num_cv  = ModelUtils::cv(true_model);
-  size_t num_div = ModelUtils::div(true_model);
-  size_t num_drv = ModelUtils::drv(true_model);
-  size_t num_dsv = ModelUtils::dsv(true_model);
+  size_t num_cv  = ModelUtils::cv(sim_model);
+  size_t num_div = ModelUtils::div(sim_model);
+  size_t num_drv = ModelUtils::drv(sim_model);
+  size_t num_dsv = ModelUtils::dsv(sim_model);
 
   // Currently we only support continuous real variables.
   if(num_div > 0) {
@@ -137,6 +137,98 @@ JegaEvaluator::SeparateVariables(const Design &from, RealVector &into_cont) cons
   for(int i=0; i<num_cv; ++i) {
     EDDY_ASSERT(dv_info[i]->IsContinuum());
     into_cont[i] = dv_info[i]->WhichValue(from);
+  }
+
+}
+
+//-----------------------------------------------------------------------------
+
+void
+JegaEvaluator::SetStateVariables(const Design &from, 
+                                 IntVector &into_disc_int,
+                                 StringMultiArray &into_disc_string,
+                                 const bool error_flag) const
+{
+    EDDY_FUNC_DEBUGSCOPE
+
+/*
+  size_t num_dsv  = ModelUtils::dsv(sim_model);
+  size_t num_idsv = ModelUtils::idsv(sim_model);
+  size_t num_adsv = ModelUtils::adsv(sim_model);
+
+  Cout << "[Active]Discrete String variables = " << num_dsv << "\n"
+       << "[Inactive]Discrete String variables = " << num_idsv << "\n"
+       << "[Total]Discrete String variables = " << num_adsv << "\n";
+  abort_handler(OTHER_ERROR);
+*/
+
+  size_t num_idiv  = ModelUtils::idiv(sim_model);
+  size_t num_idsv  = ModelUtils::idsv(sim_model);
+
+  // Vector for design variables
+  RealVector continuous_variables;
+  // Decision for the type of evaluation
+  bool evaluation_flag = true;
+
+  // Extract variables
+  SeparateVariables(from, continuous_variables);
+
+  // allocate memory for arrays handled by this function.
+  if(into_disc_int.length() != num_idiv) 
+    into_disc_int.size(num_idiv);
+
+  if(into_disc_string.num_elements() != num_idsv) {
+    StringMultiArray::extent_gen extents;
+    into_disc_string.resize(extents[num_idsv]);
+  }
+  
+  // Prepare to set inactive (state) discrete string set variable
+  StringMultiArrayConstView disc_string_labels = 
+    ModelUtils::inactive_discrete_string_variable_labels(sim_model);
+  bool found_label = false;
+
+  // Set inactive discrete string set variable -> Evaluation Type
+  // Set inactive discrete integer variable -> Neighbor IDs.  
+  if(!error_flag) {
+    //TODO: This is where we would call the adaptive decision maker
+    //decision_maker.GetNearestNeighbors(into_disc_int.values(), num_idiv);
+    //decision_maker.GetDesignDecision(continuous_variables.values(), num_cdv, 
+    //                                 evaluation_flag);
+
+    // Pass evaluation decision to the driver through discrete string set
+    for(size_t i=0; i<num_idsv; ++i) {
+
+      const auto &label = disc_string_labels[i];
+      if(label == "SWITCH") {
+        into_disc_string[i] = (evaluation_flag) ? "TRUE" : "INTERP";
+        found_label         = true;
+      }
+
+    }
+
+  }
+  else {
+    // Function was called for error_model
+    //TODO: This is where we would call the adaptive decision maker
+    //decision_maker.GetNearestNeighbors(into_disc_int.values(), num_idiv);
+
+    // Pass Error flag to the driver through discrete string set
+    for(size_t i=0; i<num_idsv; ++i) {
+
+      const auto &label = disc_string_labels[i];
+      if(label == "SWITCH") {
+        into_disc_string[i] = "ERROR";
+        found_label         = true;
+      }
+
+    }
+
+  }
+  
+  if(!found_label) {
+    Cout << "Error: Adaptive JEGA Optimizer requires a discrete string set "
+         << "state variable with label \"SWITCH\".\n";
+    abort_handler(METHOD_ERROR);
   }
 
 }
@@ -203,6 +295,10 @@ JegaEvaluator::Evaluate(DesignGroup &group)
   StringMultiArray disc_string_vars;
 */
 
+  // arrays/vectors for adaptive decision model
+  IntVector        state_int_vars;
+  StringMultiArray state_string_vars; // "ERROR", "INTERP", "TRUE"
+
   // prepare to iterate over the group
   DesignDVSortSet::const_iterator it(group.BeginDV());
   const DesignDVSortSet::const_iterator e(group.EndDV());
@@ -252,15 +348,15 @@ JegaEvaluator::Evaluate(DesignGroup &group)
     SeparateVariables(**it, continuous_variables /*, disc_int_vars, disc_real_vars,
         disc_string_vars*/);
 
-    // send this guy out for evaluation using the "true_model"
+    // send this guy out for evaluation using the "sim_model"
 
     // first, set the current values of the variables in the model
-    ModelUtils::continuous_variables(true_model, continuous_variables);
-    //ModelUtils::discrete_int_variables(true_model, disc_int_vars);
-    //ModelUtils::discrete_real_variables(true_model, disc_real_vars);
+    ModelUtils::continuous_variables(sim_model, continuous_variables);
+    //ModelUtils::discrete_int_variables(sim_model, disc_int_vars);
+    //ModelUtils::discrete_real_variables(sim_model, disc_real_vars);
     //// Strings set by calling single value setter for each
     ////for (size_t i=0; i<disc_string_vars.num_elements(); ++i)
-    ////  ModelUtils::discrete_string_variable(true_model, disc_string_vars[i],i);
+    ////  ModelUtils::discrete_string_variable(sim_model, disc_string_vars[i],i);
     //// Could use discrete_string_varables to avoid overhead of repeated 
     //// function calls, but it takes a StringMultiArrayConstView, which
     //// must be created from disc_string_vars. Maybe there's a simpler way,
@@ -270,25 +366,35 @@ JegaEvaluator::Evaluate(DesignGroup &group)
     ////   boost::indices[idx_range(0,dsv_len)]];
     //// ModelUtils::discrete_string_variables(this->_model, dsv_view);
     
+    //=========================================================================
+    // Pass decision to driver.
+    //=========================================================================
+    SetStateVariables(**it, state_int_vars, state_string_vars); 
+    ModelUtils::inactive_discrete_int_variables(sim_model, state_int_vars);
+    const size_t idsv_len = state_string_vars.num_elements();
+    StringMultiArrayConstView idsv_view = state_string_vars[
+      boost::indices[idx_range(0,idsv_len)]];
+    ModelUtils::inactive_discrete_string_variables(sim_model, idsv_view);
+
     // now request the evaluation in synchronous or asyncronous mode.
-    if(true_model.asynch_flag()) {
+    if(sim_model.asynch_flag()) {
       // The following method call will use the default
       // Active set vector which is to just compute
       // function values, no gradients or hessians.
-      true_model.evaluate_nowait();
+      sim_model.evaluate_nowait();
     }
     else {
       // The following method call will use the default
       // Active set vector which is to just compute
       // function values, no gradients or hessians.
-      true_model.evaluate();
+      sim_model.evaluate();
 
       // increment the number of performed evaluations by 1
       IncrementNumberEvaluations();
 
       // Record the responses back into the Design
       const RealVector& ftn_vals =
-          true_model.current_response().function_values();
+          sim_model.current_response().function_values();
 
       RecordResponses(ftn_vals, **it);
 
@@ -316,13 +422,13 @@ JegaEvaluator::Evaluate(DesignGroup &group)
 
   // If we did our evaluations asynchronously, we did not yet record
   // the results (because they were not available).  We need to do so
-  // now.  The call to _model.synchronize causes the program to block
+  // now.  The call to sim_model.synchronize causes the program to block
   // until all the results are available.  We can then record the
   // responses in the same fashion as above.  Note that the linear
   // constraints have already been computed!!
-  if(true_model.asynch_flag()) {
+  if(sim_model.asynch_flag()) {
     // Wait for the responses.
-    const IntResponseMap& response_map = true_model.synchronize();
+    const IntResponseMap& response_map = sim_model.synchronize();
     size_t num_resp = response_map.size();
 
     // increment the number of evaluations by the number of responses
@@ -354,14 +460,100 @@ JegaEvaluator::Evaluate(DesignGroup &group)
   }
 
   // Now get the error estimate at each true evaluation using the error_model
-  //if(ret) {
+  // Only run error_model when sim_model was successfull. Otherwise, we let
+  // the code to fall through back to Dakota for printing errors messages.
+  if(ret) {
 
-  //}
+    // Now we go over all true designs.
+    for(; it!=e; ++it) {
+
+      // Note: We assume that the designs have already been evaluated. Furthermore, 
+      // we do not check whether the function evaluation limit has been exceeded, 
+      // since error evaluations are considered auxiliary and should not contribute
+      //  to the user-specified maximum function evaluation count.
+    
+      // extract the real and continuous variables
+      // from the current Design
+      SeparateVariables(**it, continuous_variables /*, disc_int_vars, disc_real_vars,
+          disc_string_vars*/);
+
+      // send this guy out for evaluation using the "error_model"
+
+      // first, set the current values of the variables in the model
+      ModelUtils::continuous_variables(error_model, continuous_variables);
+      //ModelUtils::discrete_int_variables(error_model, disc_int_vars);
+      //ModelUtils::discrete_real_variables(error_model, disc_real_vars);
+      //// Strings set by calling single value setter for each
+      ////for (size_t i=0; i<disc_string_vars.num_elements(); ++i)
+      ////  ModelUtils::discrete_string_variable(sim_model, disc_string_vars[i],i);
+      //// Could use discrete_string_varables to avoid overhead of repeated 
+      //// function calls, but it takes a StringMultiArrayConstView, which
+      //// must be created from disc_string_vars. Maybe there's a simpler way,
+      //// but...
+      //// const size_t &dsv_len = disc_string_vars.num_elements();
+      //// StringMultiArrayConstView dsv_view = disc_string_vars[ 
+      ////   boost::indices[idx_range(0,dsv_len)]];
+      //// ModelUtils::discrete_string_variables(this->_model, dsv_view);
+      
+      //========================================================================
+      // Pass decision to driver.
+      //========================================================================
+      SetStateVariables(**it, state_int_vars, state_string_vars, true); 
+      ModelUtils::inactive_discrete_int_variables(error_model, state_int_vars);
+      const size_t idsv_len = state_string_vars.num_elements();
+      StringMultiArrayConstView idsv_view = state_string_vars[
+        boost::indices[idx_range(0,idsv_len)]];
+      ModelUtils::inactive_discrete_string_variables(error_model, idsv_view);
+
+      // now request the evaluation in synchronous or asyncronous mode.
+      if(error_model.asynch_flag()) 
+        error_model.evaluate_nowait();
+      else {
+        // The following method call will use the default
+        // Active set vector which is to just compute
+        // function values, no gradients or hessians.
+        error_model.evaluate();
+
+        // Record the error responses
+        const RealVector& ftn_vals =
+            error_model.current_response().function_values();
+
+	// Error response should not be sent to JEGA.
+        //RecordResponses(ftn_vals, **it);
+      }
+
+    }
+
+    // If we did our evaluations asynchronously, we did not yet record
+    // the results (because they were not available).  We need to do so
+    // now.  The call to error_model.synchronize causes the program to block
+    // until all the results are available.  We can then record the
+    // responses in the same fashion as above.  Note that the linear
+    // constraints have already been computed!!
+    if(error_model.asynch_flag()) {
+      // Wait for the responses.
+      const IntResponseMap& response_map = error_model.synchronize();
+      size_t num_resp = response_map.size();
+
+      EDDY_ASSERT(num_resp == num_eval_reqs);
+
+      // prepare to access the elements of the response_map by iterator.
+      IntRespMCIter r_cit = response_map.begin();
+
+      // Record the set of responses in the DesignGroup
+      for(it=group.BeginDV(); it!=e; ++it) {
+        // Error response should not be sent to JEGA
+        //RecordResponses(r_cit->second.function_values(), **it);
+
+        //increment
+        ++r_cit;
+      }
+    }
+  }
 
   return ret;
 }
 
 
 //-----------------------------------------------------------------------------
-
 
