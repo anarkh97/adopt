@@ -65,6 +65,7 @@ AdaptiveJegaOptimizer.cpp
 JegaDriver.cpp
 JegaEvaluatorCreator.cpp
 JegaEvaluator.cpp
+AdaptiveDecisionMaker.cpp
 )
 
 # -----------------------------

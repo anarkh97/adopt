@@ -65,13 +65,13 @@ void DakotaEnvironmentWrapper::SetupAdaptiveOptimizer()
     if(!string_sets.empty()) {
 
       // We are looking for a string set whose permissible values are
-      // "TRUE", "INTERP", and "ERROR".
+      // "TRUE", "APPROX", and "ERROR".
       int num_matches = 0;
       for(auto &sets : string_sets) {
         if(sets.size() > 3) continue;
 
 	for(auto &val : sets)
-          if(val == "TRUE" or val == "INTERP" or val == "ERROR")
+          if(val == "TRUE" or val == "APPROX" or val == "ERROR")
             num_matches++;
       }
 
@@ -113,6 +113,8 @@ void DakotaEnvironmentWrapper::SetupAdaptiveOptimizer()
 
     }
   }
+
+  abort_handler(OTHER_ERROR);
 
 }
 

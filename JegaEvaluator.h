@@ -17,6 +17,8 @@
 // Include the main optimizer class to get Model and other dakota things.
 #include<DakotaOptimizer.hpp>
 
+#include<AdaptiveDecisionMaker.h>
+
 /*****************************************************
  * Custom implementation of the 
  * GeneticAlgorithmEvaluator class in JEGA::Algorithms.
@@ -30,6 +32,8 @@ private:
 
   Dakota::Model& sim_model;
   Dakota::Model& error_model;
+
+  AdaptiveDecisionMaker decision_maker;
 
 public:
 
@@ -84,14 +88,22 @@ protected:
   void SeparateVariables(const JEGA::Utilities::Design& from, 
                          Dakota::RealVector& into_cont) const;
 
+  //! Function is set to non-const as we update the decision maker here.
   void SetStateVariables(const JEGA::Utilities::Design& from,
                          Dakota::IntVector& into_disc_int,
 			 Dakota::StringMultiArray& into_disc_string,
-			 const bool error_flag=false) const;
-
+			 const bool error_flag=false);
 
   void RecordResponses(const Dakota::RealVector& from, 
                        JEGA::Utilities::Design& into) const;
+
+  //! Function is set to non-const as we update the decision maker here.
+  void RecordErrorInDecisionMaker(const std::vector<Dakota::RespMetadataT>& vals,
+                                  const Dakota::StringArray& labels,
+                                  JEGA::Utilities::Design& dv);
+
+  void AddDesignsToDecisionMakerDatabase(JEGA::Utilities::DesignGroup& group);
+  void TrainDecisionMaker();
 
   std::size_t GetNumberNonLinearConstraints() const;
   std::size_t GetNumberLinearConstraints() const;
