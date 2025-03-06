@@ -144,9 +144,10 @@ JegaEvaluator::SeparateVariables(const Design &from, RealVector &into_cont) cons
 //-----------------------------------------------------------------------------
 
 void
-JegaEvaluator::SetStateVariables(const Design &from, 
+JegaEvaluator::SetStateVariables(const RealVector& cont_vars, 
                                  IntVector &into_disc_int,
                                  StringMultiArray &into_disc_string,
+				 String &decision,
                                  const bool error_flag)
 {
     EDDY_FUNC_DEBUGSCOPE
@@ -166,13 +167,10 @@ JegaEvaluator::SetStateVariables(const Design &from,
   size_t num_idiv  = ModelUtils::idiv(sim_model);
   size_t num_idsv  = ModelUtils::idsv(sim_model);
 
-  // Vector for design variables
-  RealVector continuous_variables;
+  EDDY_ASSERT(cont_vars.length() == num_cv);
+
   // Decision for the type of evaluation
   bool evaluation_flag = true;
-
-  // Extract variables
-  SeparateVariables(from, continuous_variables);
 
   // allocate memory for arrays handled by this function.
   if(into_disc_int.length() != num_idiv) 
@@ -189,12 +187,11 @@ JegaEvaluator::SetStateVariables(const Design &from,
   bool found_label = false;
 
   // Set inactive discrete string set variable -> Evaluation Type
-  // Set inactive discrete integer variable -> Neighbor IDs.  
+  // Set inactive discrete integer variable -> Neighbor evaluation IDs.  
   if(!error_flag) {
-    decision_maker.GetNearestNeighbors(into_disc_int, num_idiv);
-    decision_maker.GetAndUpdateEvaluationDecision(continuous_variables,
-                                                  num_cv,
-                                                  evaluation_flag);
+
+    decision_maker.GetNearestNeighbors(cont_vars, into_disc_int, num_idiv);
+    decision_maker.GetEvaluationDecision(cont_vars, evaluation_flag);
 
     // Pass evaluation decision to the driver through discrete string set
     for(size_t i=0; i<num_idsv; ++i) {
@@ -202,6 +199,7 @@ JegaEvaluator::SetStateVariables(const Design &from,
       const auto &label = disc_string_labels[i];
       if(label == "SWITCH") {
         into_disc_string[i] = (evaluation_flag) ? "TRUE" : "APPROX";
+	decision            = into_disc_string[i];
         found_label         = true;
       }
 
@@ -210,7 +208,8 @@ JegaEvaluator::SetStateVariables(const Design &from,
   }
   else {
     // Function was called for error_model
-    decision_maker.GetNearestNeighbors(into_disc_int, num_idiv);
+    decision_maker.GetNearestNeighbors(cont_vars,
+      into_disc_int, num_idiv);
 
     // Pass Error flag to the driver through discrete string set
     for(size_t i=0; i<num_idsv; ++i) {
@@ -218,6 +217,7 @@ JegaEvaluator::SetStateVariables(const Design &from,
       const auto &label = disc_string_labels[i];
       if(label == "SWITCH") {
         into_disc_string[i] = "ERROR";
+	decision            = into_disc_string[i];
         found_label         = true;
       }
 
@@ -274,22 +274,20 @@ JegaEvaluator::RecordResponses(const RealVector &from, Design &into) const
 void
 JegaEvaluator::RecordErrorInDecisionMaker(const std::vector<RespMetadataT> &vals, 
                                           const StringArray &labels, 
-                                          Design &dv)
+                                          const RealVector &cont_vars)
 {
 
   EDDY_FUNC_DEBUGSCOPE
 
   size_t num_cv = ModelUtils::cv(sim_model);
 
-  // Get current design variables
-  RealVector continuous_variables;
-  SeparateVariables(dv, continuous_variables);
+  EDDY_ASSERT(cont_vars.length() == num_cv);
 
   size_t loc = 0;
   bool found_label = false;
   for(const auto &lbl : labels) {
     if(lbl == "MSE" and !found_label) {
-      decision_maker.RecordErrorForVariables(continuous_variables, num_cv, vals[loc]);
+      decision_maker.RecordErrorForVariables(cont_vars, vals[loc]);
       found_label = true;
     }
     ++loc;
@@ -407,7 +405,9 @@ JegaEvaluator::Evaluate(DesignGroup &group)
     //=========================================================================
     // Pass decision to driver.
     //=========================================================================
-    SetStateVariables(**it, state_int_vars, state_string_vars); 
+    String eval_decision;
+    SetStateVariables(continuous_variables, state_int_vars, 
+      state_string_vars, eval_decision); 
     ModelUtils::inactive_discrete_int_variables(sim_model, state_int_vars);
     const size_t idsv_len = state_string_vars.num_elements();
     StringMultiArrayConstView idsv_view = state_string_vars[
@@ -420,12 +420,24 @@ JegaEvaluator::Evaluate(DesignGroup &group)
       // Active set vector which is to just compute
       // function values, no gradients or hessians.
       sim_model.evaluate_nowait();
+
+      // Always call this after the derived interface 
+      // has mapped parameters with responses.
+      int eval_id = sim_model.evaluation_id();
+      decision_maker.UpdateEvaluationDecision(eval_id, continuous_variables,
+                                              eval_decision);
     }
     else {
       // The following method call will use the default
       // Active set vector which is to just compute
       // function values, no gradients or hessians.
       sim_model.evaluate();
+
+      // Always call this after the derived interface 
+      // has mapped parameters with responses.
+      int eval_id = sim_model.evaluation_id();
+      decision_maker.UpdateEvaluationDecision(eval_id, continuous_variables,
+                                              eval_decision);
 
       // increment the number of performed evaluations by 1
       IncrementNumberEvaluations();
@@ -503,25 +515,19 @@ JegaEvaluator::Evaluate(DesignGroup &group)
   if(ret) {
 
     // Now we go over all true designs and map errors.
-    for(; it!=e; ++it) {
+    IntRealVectorMap::const_iterator tr_it = decision_maker.GetBeginForTrueDatabase();
+    const IntRealVectorMap::const_iterator tr_e = decision_maker.GetEndForTrueDatabase();
+    for(; tr_it!=tr_e; ++tr_it) {
 
       // Note: We assume that the designs have already been evaluated. Furthermore, 
       // we do not check whether the function evaluation limit has been exceeded, 
       // since error evaluations are considered auxiliary and should not contribute
       //  to the user-specified maximum function evaluation count.
     
-      // extract the real and continuous variables
-      // from the current Design
-      SeparateVariables(**it, continuous_variables /*, disc_int_vars, disc_real_vars,
-          disc_string_vars*/);
-
-      // skip if evaluation was an approximate evaluation.
-      if(decision_maker.IsEvaluationApprox(continuous_variables)) continue;
-
       // send this guy out for evaluation using the "error_model"
 
       // first, set the current values of the variables in the model
-      ModelUtils::continuous_variables(error_model, continuous_variables);
+      ModelUtils::continuous_variables(error_model, tr_it->second);
       //ModelUtils::discrete_int_variables(error_model, disc_int_vars);
       //ModelUtils::discrete_real_variables(error_model, disc_real_vars);
       //// Strings set by calling single value setter for each
@@ -539,7 +545,9 @@ JegaEvaluator::Evaluate(DesignGroup &group)
       //========================================================================
       // Pass error flag to driver.
       //========================================================================
-      SetStateVariables(**it, state_int_vars, state_string_vars, true); 
+      String unused_string;
+      SetStateVariables(tr_it->second, state_int_vars, 
+        state_string_vars, unused_string, true); 
       ModelUtils::inactive_discrete_int_variables(error_model, state_int_vars);
       const size_t idsv_len = state_string_vars.num_elements();
       StringMultiArrayConstView idsv_view = state_string_vars[
@@ -562,7 +570,7 @@ JegaEvaluator::Evaluate(DesignGroup &group)
           error_model.current_response().shared_data().metadata_labels();
 
 	// Error response should not be sent to JEGA.
-        RecordErrorInDecisionMaker(mtd_vals, mtd_labels, **it);
+        RecordErrorInDecisionMaker(mtd_vals, mtd_labels, tr_it->second);
       }
 
     }
@@ -590,7 +598,7 @@ JegaEvaluator::Evaluate(DesignGroup &group)
           r_cit->second.metadata();
 	const StringArray& mtd_labels = 
           r_cit->second.shared_data().metadata_labels();
-        RecordErrorInDecisionMaker(mtd_vals, mtd_labels, **it);
+        RecordErrorInDecisionMaker(mtd_vals, mtd_labels, tr_it->second);
 
         //increment
         ++r_cit;

@@ -1,5 +1,6 @@
 #include<DakotaEnvironmentWrapper.h>
 #include<AdaptiveJegaOptimizer.h>
+#include<ForkApplicInterfaceWrapper.h>
 
 #include<DakotaModel.hpp>
 #include<DakotaInterface.hpp>
@@ -105,6 +106,12 @@ void DakotaEnvironmentWrapper::SetupAdaptiveOptimizer()
 
       shared_ptr<Model> err_model =
         ModelUtils::get_model(problem_db);
+
+      // Reset to our own interface. This is done to distinguish
+      // working directories of true models and error models.
+      Interface &err_model_interface = err_model->derived_interface();   
+      err_model_interface.assign_rep(
+        std::make_shared<ForkApplicInterfaceWrapper>(problem_db));
 
       // assign our optimizer.
       topLevelIterator.assign_rep(

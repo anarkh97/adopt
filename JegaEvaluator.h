@@ -89,9 +89,10 @@ protected:
                          Dakota::RealVector& into_cont) const;
 
   //! Function is set to non-const as we update the decision maker here.
-  void SetStateVariables(const JEGA::Utilities::Design& from,
+  void SetStateVariables(const Dakota::RealVector& cont_vars,
                          Dakota::IntVector& into_disc_int,
 			 Dakota::StringMultiArray& into_disc_string,
+			 Dakota::String& decision,
 			 const bool error_flag=false);
 
   void RecordResponses(const Dakota::RealVector& from, 
@@ -100,7 +101,7 @@ protected:
   //! Function is set to non-const as we update the decision maker here.
   void RecordErrorInDecisionMaker(const std::vector<Dakota::RespMetadataT>& vals,
                                   const Dakota::StringArray& labels,
-                                  JEGA::Utilities::Design& dv);
+                                  const Dakota::RealVector& cont_vars);
 
   void AddDesignsToDecisionMakerDatabase(JEGA::Utilities::DesignGroup& group);
   void TrainDecisionMaker();

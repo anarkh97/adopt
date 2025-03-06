@@ -6,7 +6,8 @@ using namespace dakota::surrogates;
 
 //------------------------------------------------------------------------------
 
-void AdaptiveDecisionMaker::GetNearestNeighbors(IntVector &into, 
+void AdaptiveDecisionMaker::GetNearestNeighbors(const RealVector &cont_vars, 
+                                                IntVector &into, 
                                                 size_t num_neighbors)
 {
 
@@ -15,9 +16,8 @@ void AdaptiveDecisionMaker::GetNearestNeighbors(IntVector &into,
 //------------------------------------------------------------------------------
 
 void
-AdaptiveDecisionMaker::GetAndUpdateEvaluationDecision(const RealVector &variables,
-                                                      size_t num_vars,
-                                                      bool &decision)
+AdaptiveDecisionMaker::GetEvaluationDecision(const RealVector &cont_vars,
+                                             bool &decision)
 {
 
 }	
@@ -25,8 +25,7 @@ AdaptiveDecisionMaker::GetAndUpdateEvaluationDecision(const RealVector &variable
 //------------------------------------------------------------------------------
 
 void
-AdaptiveDecisionMaker::RecordErrorForVariables(const RealVector &variables,
-                                               size_t num_vars,
+AdaptiveDecisionMaker::RecordErrorForVariables(const RealVector &cont_vars,
                                                const double &error)
 {
 
@@ -35,7 +34,7 @@ AdaptiveDecisionMaker::RecordErrorForVariables(const RealVector &variables,
 //------------------------------------------------------------------------------
 
 bool
-AdaptiveDecisionMaker::IsEvaluationApprox(const RealVector &variables)
+AdaptiveDecisionMaker::IsEvaluationApprox(const RealVector &cont_vars)
 {
 
 }
@@ -43,7 +42,8 @@ AdaptiveDecisionMaker::IsEvaluationApprox(const RealVector &variables)
 //------------------------------------------------------------------------------
 
 bool
-AdaptiveDecisionMaker::AddToDatabase(const RealVector &variables)
+AdaptiveDecisionMaker::UpdateEvaluationDecision(int id, const RealVector &cont_vars, 
+                                                const String &decision)
 {
 
 }
