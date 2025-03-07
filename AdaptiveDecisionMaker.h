@@ -1,6 +1,7 @@
 #ifndef _ADAPTIVE_DECISION_MAKER_H_
 #define _ADAPTIVE_DECISION_MAKER_H_
 
+#include<array>
 #include<KDTree.h>
 
 // Dakota includes
@@ -12,6 +13,7 @@ class AdaptiveDecisionMaker {
   //! Database containers
   Dakota::IntRealVectorMap true_evals;
   Dakota::IntRealVectorMap approx_evals; // internal var.
+  Dakota::IntRealMap       error_vals; // internal var. 
 
   //! Gaussian regression model --- operates on approximation errors.
   dakota::surrogates::GaussianProcess gp_model;
@@ -30,20 +32,38 @@ public:
 
   //! Functions that interface with Dakota's Iterator (Optimizer)
   void GetNearestNeighbors(const Dakota::RealVector& variables,
-                           Dakota::IntVector& into, size_t num_neighbors);
-  void GetEvaluationDecision(const Dakota::RealVector& variables, 
-                             bool& decision);
+                           Dakota::IntVector& into, size_t num_neighbors,
+                           bool force=false);
+  bool GetEvaluationDecision(const Dakota::RealVector& variables);
   void RecordErrorForVariables(const Dakota::RealVector& variables, 
                                const double& error);
   bool IsEvaluationApprox(const Dakota::RealVector& variables);
-  bool UpdateEvaluationDecision(int id, const Dakota::RealVector& variables,
-                                const Dakota::String& decision);
+  void UpdateEvaluationDecision(const int id, 
+                                const Dakota::RealVector& variables,
+                                const bool decision);
 
   //! Functions related to training and model assessment
   void Train();
 
 };
 
+//-----------------------------------------------------------------------------
+
+// An instantiation of "Obj" in KDTree.h
+template <int dim>
+class PointInND {
+public:
+  int id;
+  std::array<double, dim> x;
+public:
+  PointInND() : id(0), x({}) { };
+  PointInND(int i, std::array<double,dim> &xin) : id(i), x(xin) { }
+  double val(int i) const { return x[i]; }
+  double width(int i) const { return 0.0; }
+  int pid() const { return id; }
+};
+
+//-----------------------------------------------------------------------------
 // Inline definitions
 
 inline Dakota::IntRealVectorMap::iterator 

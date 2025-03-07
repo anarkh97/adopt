@@ -88,22 +88,22 @@ protected:
   void SeparateVariables(const JEGA::Utilities::Design& from, 
                          Dakota::RealVector& into_cont) const;
 
-  //! Function is set to non-const as we update the decision maker here.
   void SetStateVariables(const Dakota::RealVector& cont_vars,
                          Dakota::IntVector& into_disc_int,
 			 Dakota::StringMultiArray& into_disc_string,
-			 Dakota::String& decision,
 			 const bool error_flag=false);
 
   void RecordResponses(const Dakota::RealVector& from, 
                        JEGA::Utilities::Design& into) const;
 
-  //! Function is set to non-const as we update the decision maker here.
+  //! Functions to update decision maker.
+  void RecordEvaluationInDecisionMaker(const int id,
+                                       const Dakota::RealVector& cont_vars,
+                                       const Dakota::StringMultiArray& disc_strings);
   void RecordErrorInDecisionMaker(const std::vector<Dakota::RespMetadataT>& vals,
                                   const Dakota::StringArray& labels,
                                   const Dakota::RealVector& cont_vars);
 
-  void AddDesignsToDecisionMakerDatabase(JEGA::Utilities::DesignGroup& group);
   void TrainDecisionMaker();
 
   std::size_t GetNumberNonLinearConstraints() const;

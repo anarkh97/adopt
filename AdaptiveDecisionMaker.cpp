@@ -8,17 +8,22 @@ using namespace dakota::surrogates;
 
 void AdaptiveDecisionMaker::GetNearestNeighbors(const RealVector &cont_vars, 
                                                 IntVector &into, 
-                                                size_t num_neighbors)
+                                                size_t num_neighbors,
+                                                bool force)
 {
+
+  // Send garbage values when true-db is empty.
+  // AN: Throw an error if force find is true but true-db is empty.
 
 }
 
 //------------------------------------------------------------------------------
 
-void
-AdaptiveDecisionMaker::GetEvaluationDecision(const RealVector &cont_vars,
-                                             bool &decision)
+bool
+AdaptiveDecisionMaker::GetEvaluationDecision(const RealVector &cont_vars)
 {
+  
+  // Send "TRUE" decision when true-db is empty.
 
 }	
 
@@ -41,9 +46,10 @@ AdaptiveDecisionMaker::IsEvaluationApprox(const RealVector &cont_vars)
 
 //------------------------------------------------------------------------------
 
-bool
-AdaptiveDecisionMaker::UpdateEvaluationDecision(int id, const RealVector &cont_vars, 
-                                                const String &decision)
+void
+AdaptiveDecisionMaker::UpdateEvaluationDecision(int id, 
+                                                const RealVector &cont_vars, 
+                                                const bool decision)
 {
 
 }
