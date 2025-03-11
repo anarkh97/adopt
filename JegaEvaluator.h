@@ -100,7 +100,8 @@ protected:
   void RecordEvaluationInDecisionMaker(const int id,
                                        const Dakota::RealVector& cont_vars,
                                        const Dakota::StringMultiArray& disc_strings);
-  void RecordErrorInDecisionMaker(const std::vector<Dakota::RespMetadataT>& vals,
+  void RecordErrorInDecisionMaker(const int id,
+                                  const std::vector<Dakota::RespMetadataT>& vals,
                                   const Dakota::StringArray& labels,
                                   const Dakota::RealVector& cont_vars);
 

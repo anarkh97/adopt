@@ -101,7 +101,8 @@ size_t JegaEvaluator::GetNumberLinearConstraints() const
 //-----------------------------------------------------------------------------
 
 void
-JegaEvaluator::SeparateVariables(const Design &from, RealVector &into_cont) const
+JegaEvaluator::SeparateVariables(const Design &from, RealVector &into_cont) 
+const
 {
 
   EDDY_FUNC_DEBUGSCOPE
@@ -315,7 +316,8 @@ JegaEvaluator::RecordEvaluationInDecisionMaker(const int id,
 //-----------------------------------------------------------------------------
 
 void
-JegaEvaluator::RecordErrorInDecisionMaker(const std::vector<RespMetadataT> &vals, 
+JegaEvaluator::RecordErrorInDecisionMaker(const int id, /* evaluation id from true model */
+                                          const std::vector<RespMetadataT> &vals, 
                                           const StringArray &labels, 
                                           const RealVector &cont_vars)
 {
@@ -330,7 +332,7 @@ JegaEvaluator::RecordErrorInDecisionMaker(const std::vector<RespMetadataT> &vals
   bool found_label = false;
   for(const auto &lbl : labels) {
     if(lbl == "MSE" and !found_label) {
-      decision_maker.RecordErrorForVariables(cont_vars, vals[loc]);
+      decision_maker.RecordErrorForVariables(id, cont_vars, vals[loc]);
       found_label = true;
     }
     ++loc;
@@ -610,8 +612,8 @@ JegaEvaluator::Evaluate(DesignGroup &group)
         const StringArray& mtd_labels = 
           error_model.current_response().shared_data().metadata_labels();
 
-	// Error response should not be sent to JEGA.
-        RecordErrorInDecisionMaker(mtd_vals, mtd_labels, tr_it->second);
+	      // Error response should not be sent to JEGA.
+        RecordErrorInDecisionMaker(tr_it->first, mtd_vals, mtd_labels, tr_it->second);
       }
 
     }
@@ -633,13 +635,15 @@ JegaEvaluator::Evaluate(DesignGroup &group)
       IntRespMCIter r_cit = response_map.begin();
 
       // Record the set of responses in the DesignGroup
-      for(it=group.BeginDV(); it!=e; ++it) {
+      for(tr_it=decision_maker.GetBeginForTrueDatabase(); 
+          tr_it!=tr_e; ++tr_it) {
         // Error response should not be sent to JEGA
         const std::vector<RespMetadataT>& mtd_vals =
           r_cit->second.metadata();
-	const StringArray& mtd_labels = 
+        const StringArray& mtd_labels = 
           r_cit->second.shared_data().metadata_labels();
-        RecordErrorInDecisionMaker(mtd_vals, mtd_labels, tr_it->second);
+        RecordErrorInDecisionMaker(tr_it->first, mtd_vals, mtd_labels, 
+                                   tr_it->second);
 
         //increment
         ++r_cit;

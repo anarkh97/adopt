@@ -5,8 +5,13 @@
 #include<KDTree.h>
 
 // Dakota includes
+#include<dakota_global_defs.hpp>
 #include<dakota_data_types.hpp>
 #include<SurrogatesGaussianProcess.hpp>
+
+/************************************************
+ *
+ ***********************************************/
 
 class AdaptiveDecisionMaker {
 
@@ -35,7 +40,8 @@ public:
                            Dakota::IntVector& into, size_t num_neighbors,
                            bool force=false);
   bool GetEvaluationDecision(const Dakota::RealVector& variables);
-  void RecordErrorForVariables(const Dakota::RealVector& variables, 
+  void RecordErrorForVariables(const int id, 
+                               const Dakota::RealVector& variables, 
                                const double& error);
   bool IsEvaluationApprox(const Dakota::RealVector& variables);
   void UpdateEvaluationDecision(const int id, 
@@ -48,8 +54,8 @@ public:
 };
 
 //-----------------------------------------------------------------------------
-
 // An instantiation of "Obj" in KDTree.h
+
 template <int dim>
 class PointInND {
 public:
