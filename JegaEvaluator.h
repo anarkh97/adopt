@@ -33,7 +33,7 @@ private:
   Dakota::Model& sim_model;
   Dakota::Model& error_model;
 
-  AdaptiveDecisionMaker decision_maker;
+  AdaptiveDecisionMaker& decision_maker;
 
 public:
 
@@ -62,18 +62,20 @@ public:
   Clone(JEGA::Algorithms::GeneticAlgorithm& algorithm) const override;
 
   //! This constructor should be used.
-  JegaEvaluator(JEGA::Algorithms::GeneticAlgorithm& algorithm, 
-                Dakota::Model& sim_model,
-		Dakota::Model& error_model);
+  JegaEvaluator(JEGA::Algorithms::GeneticAlgorithm& algorithm_,
+                Dakota::Model& sim_model_, 
+                Dakota::Model& error_model_,
+                AdaptiveDecisionMaker& decision_maker_);
 
   //! Copy constructor
   JegaEvaluator(const JegaEvaluator& copy);
 
   //! Copy constructor w/ algorithm and model
   JegaEvaluator(const JegaEvaluator& copy, 
-                JEGA::Algorithms::GeneticAlgorithm& algorithm,
-                Dakota::Model& sim_model,
-		Dakota::Model& error_model);
+                JEGA::Algorithms::GeneticAlgorithm& algorithm_,
+                Dakota::Model& sim_model_, 
+                Dakota::Model& error_model_,
+                AdaptiveDecisionMaker& decision_maker_);
 
   bool Evaluate(JEGA::Utilities::DesignGroup& group) override;
 

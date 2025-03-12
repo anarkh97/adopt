@@ -6,6 +6,15 @@ using namespace dakota::surrogates;
 
 //------------------------------------------------------------------------------
 
+AdaptiveDecisionMaker::AdaptiveDecisionMaker()
+{
+
+  // Initialize GP model
+
+}
+
+//------------------------------------------------------------------------------
+
 void AdaptiveDecisionMaker::GetNearestNeighbors(const RealVector &cont_vars, 
                                                 IntVector &into, 
                                                 size_t num_neighbors,
@@ -39,14 +48,14 @@ AdaptiveDecisionMaker::GetEvaluationDecision(const RealVector &cont_vars)
   // Send "TRUE" decision when true-db is empty.
   if(true_evals.empty()) return true;
 
-}	
+}
 
 //------------------------------------------------------------------------------
 
 void
-AdaptiveDecisionMaker::RecordErrorForVariables(const int eval_id,
-                                               const RealVector &cont_vars,
-                                               const double &error)
+AdaptiveDecisionMaker::RecordEvaluationError(const int eval_id,
+                                             const RealVector &cont_vars,
+                                             const double &error)
 {
 
   const RealVector &stored_vars = true_evals[eval_id];
@@ -66,19 +75,34 @@ AdaptiveDecisionMaker::RecordErrorForVariables(const int eval_id,
 
 //------------------------------------------------------------------------------
 
-bool
-AdaptiveDecisionMaker::IsEvaluationApprox(const RealVector &cont_vars)
-{
-
-}
-
-//------------------------------------------------------------------------------
-
 void
-AdaptiveDecisionMaker::UpdateEvaluationDecision(int id, 
+AdaptiveDecisionMaker::RecordEvaluationDecision(int eval_id, 
                                                 const RealVector &cont_vars, 
-                                                const bool decision)
+                                                const bool eval_type)
 {
+
+  if(eval_type == true) {
+    // First check if evaluation id has already been mapped or not.
+    IntRealVectorMap::iterator it = true_evals.find(eval_id);
+    if(it != true_evals.end()) {
+      Cerr << "ADAPTIVE SOGA: Duplicate evaluation ID " << eval_id
+           << ", previously mapped to variables: " << it->second;
+      abort_handler(METHOD_ERROR);
+    }
+
+    true_evals[eval_id] = cont_vars;
+  }
+  else {
+    // Firt check if evaluation id has already been mapped or not.
+    IntRealVectorMap::iterator it = approx_evals.find(eval_id);
+    if(it != approx_evals.end()) {
+      Cerr << "ADAPTIVE SOGA: Duplicate evaluation ID " << eval_id
+           << ", previously mapped to variables: " << it->second;
+      abort_handler(METHOD_ERROR);
+    }
+
+    approx_evals[eval_id] = cont_vars;
+  }
 
 }
 

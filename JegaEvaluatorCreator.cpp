@@ -9,8 +9,11 @@ using namespace JEGA::Algorithms;
 
 //-----------------------------------------------------------------------------
 
-JegaEvaluatorCreator::JegaEvaluatorCreator(Model &tmodel_, Model &emodel_)
-                    : sim_model(tmodel_), error_model(emodel_)
+JegaEvaluatorCreator::JegaEvaluatorCreator(Model &tmodel_, 
+                                           Model &emodel_,
+                                           AdaptiveDecisionMaker &dmaker_)
+                    : sim_model(tmodel_), error_model(emodel_), 
+                      decision_maker(dmaker_)
 {
   EDDY_FUNC_DEBUGSCOPE 
 }
@@ -21,8 +24,6 @@ JegaEvaluatorCreator::JegaEvaluatorCreator(Model &tmodel_, Model &emodel_)
 GeneticAlgorithmEvaluator*
 JegaEvaluatorCreator::CreateEvaluator(GeneticAlgorithm &alg)
 {
-
   EDDY_FUNC_DEBUGSCOPE
   return new JegaEvaluator(alg, sim_model, error_model);
-
 }

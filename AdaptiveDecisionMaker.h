@@ -9,6 +9,9 @@
 #include<dakota_data_types.hpp>
 #include<SurrogatesGaussianProcess.hpp>
 
+// Forward decleration for KDTree
+template <int dim> class PointInND;
+
 /************************************************
  *
  ***********************************************/
@@ -23,9 +26,12 @@ class AdaptiveDecisionMaker {
   //! Gaussian regression model --- operates on approximation errors.
   dakota::surrogates::GaussianProcess gp_model;
 
+  //! Neighbor search model
+
+
 public:
 
-  AdaptiveDecisionMaker() { };
+  AdaptiveDecisionMaker(int var_dim);
   ~AdaptiveDecisionMaker() { };
 
   //! Iterating functions
@@ -36,17 +42,19 @@ public:
   Dakota::IntRealVectorMap::const_iterator GetEndForTrueDatabase() const;
 
   //! Functions that interface with Dakota's Iterator (Optimizer)
+  //! Getters
   void GetNearestNeighbors(const Dakota::RealVector& variables,
                            Dakota::IntVector& into, size_t num_neighbors,
                            bool force=false);
   bool GetEvaluationDecision(const Dakota::RealVector& variables);
-  void RecordErrorForVariables(const int id, 
-                               const Dakota::RealVector& variables, 
-                               const double& error);
-  bool IsEvaluationApprox(const Dakota::RealVector& variables);
-  void UpdateEvaluationDecision(const int id, 
+
+  //! Update functions
+  void RecordEvaluationError(const int id, 
+                             const Dakota::RealVector& variables, 
+                             const double& error);
+  void RecordEvaluationDecision(const int id, 
                                 const Dakota::RealVector& variables,
-                                const bool decision);
+                                const bool eval_type);
 
   //! Functions related to training and model assessment
   void Train();

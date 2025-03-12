@@ -11,6 +11,8 @@
 // Include the main optimizer class to get Model and other dakota things.
 #include<DakotaOptimizer.hpp>
 
+#include<AdaptiveDecisionMaker.h>
+
 /************************************************
  * JegaEvaluatorCreator is a utility class that 
  * recieves the sim_model and error_model from 
@@ -23,11 +25,14 @@ class JegaEvaluatorCreator : public JEGA::FrontEnd::EvaluatorCreator {
 
   Dakota::Model &sim_model;
   Dakota::Model &error_model;
+  AdaptiveDecisionMaker &decision_maker;
 
 public:
 
   //! Constructor
-  JegaEvaluatorCreator(Dakota::Model& sim_model, Dakota::Model& error_model); 
+  JegaEvaluatorCreator(Dakota::Model& sim_model, 
+                       Dakota::Model& error_model,
+                       AdaptiveDecisionMaker& decision_maker);
 
   //! Destructor
   ~JegaEvaluatorCreator() { };

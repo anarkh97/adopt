@@ -64,7 +64,7 @@ string asstring(const T& val)
 
 AdaptiveJegaOptimizer::AdaptiveJegaOptimizer(ProblemDescDB &prob_db, 
                                              shared_ptr<Model> sim_model, 
-					     shared_ptr<Model> error_model)
+                                             shared_ptr<Model> error_model)
                      : Optimizer(prob_db, sim_model, /*propagate the true model to Dakota*/
                                  std::shared_ptr<AdaptiveJegaTraits>(
                                  new AdaptiveJegaTraits())),

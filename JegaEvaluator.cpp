@@ -17,10 +17,12 @@ using namespace JEGA::Algorithms;
 
 //-----------------------------------------------------------------------------
 
-JegaEvaluator::JegaEvaluator(GeneticAlgorithm &algorithm, Model &tmodel_, 
-                             Model &emodel_)
+JegaEvaluator::JegaEvaluator(GeneticAlgorithm &algorithm, 
+                             Model &tmodel_, 
+                             Model &emodel_,
+                             AdaptiveDecisionMaker &decision_maker_)
              : GeneticAlgorithmEvaluator(algorithm), sim_model(tmodel_), 
-               error_model(emodel_)
+               error_model(emodel_), decision_maker(decision_maker_)
 {
   EDDY_FUNC_DEBUGSCOPE
 }
@@ -29,17 +31,20 @@ JegaEvaluator::JegaEvaluator(GeneticAlgorithm &algorithm, Model &tmodel_,
 
 JegaEvaluator::JegaEvaluator(const JegaEvaluator &copy)
              : GeneticAlgorithmEvaluator(copy), sim_model(copy.sim_model),
-               error_model(copy.error_model)
+               error_model(copy.error_model), decision_maker(copy.decision_maker)
 {
   EDDY_FUNC_DEBUGSCOPE
 }
 
 //-----------------------------------------------------------------------------
 
-JegaEvaluator::JegaEvaluator(const JegaEvaluator &copy, GeneticAlgorithm &algo,
-                             Model &tmodel_, Model &emodel_)
+JegaEvaluator::JegaEvaluator(const JegaEvaluator &copy, 
+                             GeneticAlgorithm &algo,
+                             Model &tmodel_, 
+                             Model &emodel_,
+                             AdaptiveDecisionMaker &decision_maker_)
              : GeneticAlgorithmEvaluator(copy, algo), sim_model(tmodel_),
-               error_model(emodel_)
+               error_model(emodel_), decision_maker(decision_maker_)
 {
   EDDY_FUNC_DEBUGSCOPE
 }
@@ -309,7 +314,7 @@ JegaEvaluator::RecordEvaluationInDecisionMaker(const int id,
   }
 
   // Update the decision maker w/ evaluation id and variables.
-  decision_maker.UpdateEvaluationDecision(id, cont_vars, eval_decision);
+  decision_maker.RecordEvaluationDecision(id, cont_vars, eval_decision);
   
 }
 
@@ -332,7 +337,7 @@ JegaEvaluator::RecordErrorInDecisionMaker(const int id, /* evaluation id from tr
   bool found_label = false;
   for(const auto &lbl : labels) {
     if(lbl == "MSE" and !found_label) {
-      decision_maker.RecordErrorForVariables(id, cont_vars, vals[loc]);
+      decision_maker.RecordEvaluationError(id, cont_vars, vals[loc]);
       found_label = true;
     }
     ++loc;
