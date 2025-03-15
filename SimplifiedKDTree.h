@@ -1,13 +1,15 @@
 #ifndef _SIMPLIFIED_KD_TREE_
 #define _SIMPLIFIED_KD_TREE_
 
+#include<cmath>
+#include<queue>
 #include<vector>
 #include<memory>
-#include<cfloat>
-#include<string>
+#include<limits>
+//#include<string>
 #include<cassert>
 #include<iterator>
-#include<iostream>
+//#include<iostream>
 #include<algorithm>
 #include<type_traits>
 
@@ -15,7 +17,18 @@
 // Helpers
 //-----------------------------------------------------------------------------
 
-template<typename CoordinateValueType>
+template<typename CoordinateContainerType>
+double EuclideanDistance(int dim,
+                         const CoordinateContainerType& p1,
+                         const CoordinateContainerType& p2) 
+{
+  double dist;
+  for(int i=0; i<dim; ++i) 
+    dist += std::pow(p1[i] - p2[i], 2);
+  return std::sqrt(dist);
+}
+
+template<typename CoordinateContainerType>
 class DefaultComparator;
 
 // deduce things at compile time
@@ -47,6 +60,21 @@ typename Iterator
 >
 class SimplifiedKDTree {
 
+private:
+
+  //! Used for storing candidates based on distance.
+  using CandidateDistPair = 
+    std::pair<double, const CoordinateType*>;
+  using CandidatePriorityQueue = 
+    std::priority_queue<CandidateDistPair>;
+
+  //! Coordinate container deduction at compile time.
+  using CoordinateContainerType = 
+    decltype(GetCoordinate(*std::declval<Iterator>()));
+  using CoordinateElementType = 
+    typename CoordinateContainerType::value_type;
+
+
 protected:
 
   int num_points; //! total number of points
@@ -60,8 +88,8 @@ protected:
   Iterator points_e;
 
   //! bounds for current (sub-) tree
-  std::vector<CoordinateType> low;
-  std::vector<CoordinateType> upp;
+  std::vector<CoordinateElementType> low;
+  std::vector<CoordinateElementType> upp;
 
   //! sub trees
   std::shared_ptr<SimplifiedKDTree<CoordinateType,Compare,Iterator>> 
@@ -98,22 +126,17 @@ public:
   //! Finding functions
   int FindCandidates(const CoordinateType& query, 
                      std::vector<CoordinateType>& output,
-                     int max_candidates,
-                     int depth=0);
-  int FindCloseCandidates(const CoordinateType& query, 
-                          std::vector<CoordinateType>& output,
-                          int max_candidates,
-                          double distance);
+                     int max_candidates) const;
   int FindCandidatesWithin(const CoordinateType& query, 
                            std::vector<CoordinateType>& output,
                            int max_candidates,
-                           double distance);
+                           double distance) const;
   int FindCandidatesInBox(const CoordinateType& qmin,/* query bounding-box min */
                           const CoordinateType& qmax,/* query bounding-box max*/
                           std::vector<CoordinateType>& output,
-                          int max_candidates);
+                          int max_candidates) const;
 
-  void Print(std::ostream& os, int depth=0);
+  //void Print(std::ostream& os, int depth=0) const;
 
 private:
 
@@ -124,11 +147,18 @@ private:
                                                 int depth=0);
 */
 
-  int GetBestSplit(const Iterator input_b,
-                   const Iterator input_e,
+  int GetBestSplit(const Iterator& input_b,
+                   const Iterator& input_e,
                    int dir);
-  void SetBoundingBox();
+  void SetBoundingBox(const Iterator& input_b,
+                      const Iterator& input_e);
 
+  // Implementations for find functions.
+
+  int FindCandidatesImpl(const CoordinateType& query,
+                         CandidatePriorityQueue& candidates,
+                         int max_candidates,
+                         int depth=0) const;
 
 };
 
@@ -169,6 +199,8 @@ SimplifiedKDTree(int k,
   split_dir  = depth % k;
 
   assert(num_points>0);
+
+  SetBoundingBox(input_b, input_e);
 
   int first_dir = split_dir;
   int best_dir  = 0;
@@ -216,8 +248,7 @@ SimplifiedKDTree(int k,
     has_child = false;
     points_b  = input_b;
     points_e  = input_e;
-    // set bounding box
-    SetBoundingBox();
+
     return;
   }
 
@@ -232,101 +263,59 @@ SimplifiedKDTree(int k,
   const Iterator &spm = 
     std::next(input_b, split-1);
 
-  split_value = (GetCoordinate(*sp)[split_dir] + GetCoordinate(*spm)[split_dir])/2.0;
+  split_value = 
+    (GetCoordinate(*sp)[split_dir] + GetCoordinate(*spm)[split_dir])/2.0;
 
   has_child = true;
   left = std::make_shared<SimplifiedKDTree<CoordinateType,Compare,Iterator>>(
     num_dims, 
     input_b, 
-    sp,
+    std::next(sp), // non-inclusive
     split_dir+1);
   right = std::make_shared<SimplifiedKDTree<CoordinateType,Compare,Iterator>>(
     num_dims, 
     std::next(sp),
-    input_e,
+    input_e, // non-inclusive
     split_dir+1);
 
 }
 
 //-----------------------------------------------------------------------------
 
-/*
-std::shared_ptr<SimplifiedKDTree>
-SimplifiedKDTree::BuildKDTree(int k, int input_size, double *input, int depth)
+template<typename CoordinateType, typename Compare, typename Iterator>
+void
+SimplifiedKDTree<CoordinateType,Compare,Iterator>::
+SetBoundingBox(const Iterator& input_b,
+               const Iterator& input_e)
 {
 
-  direction = depth % k;
-  int first_dir = dir;
-  int best_dir  = 0;
-  int split;
-  double best_quality = 0.0;
-  std::vector<double> quality(k, 0.0);
+  for(int k=0; k<num_dims; ++k) {
 
-  // Any large max iterations value should be fine.
-  int iter=0;
-  for(; iter<500; ++iter) {
-    if(input_size <= 4) {
-      split = input_size;
-      quality[dir] = 0.0;
-      best_dir = dir;
-      break;
-    }
+    // input could be an bidirectional contianer type (e.g., map, set, etc.)
+    std::vector<CoordinateContainerType> points;
 
-    split = GetBestSplit(dir);
+    for(auto it=input_b; it != input_e; ++it)
+      points.push_back(GetCoordinate(*it));
 
-    // calculate the quality of this split
-    quality[dir] = std::min(split, input_size-split);
-    
-    // check if this is the best value seen till now.
-    if(dir == first_dir || quality[dir]>best_quality) {
-      best_quality = quality[dir];
-      best_dir     = dir;
-    }
+    // sort based on co-ordinate.
+    Compare compare(k);
+    std::sort(points.begin(), points.end(), compare);
 
-    // check if we need to improve.
-    if(quality[dir] > 0.25*input_size)
-      break;
-    else {
-      int new_dir = (dir+1) % k;
-      if(new_dir == first_dir) break;
-      dir = new_dir;
-    }
+    // store bounds for this dimension.
+    low.push_back(points.front()[k]);
+    upp.push_back(points.back()[k]);
 
   }
-
-  assert(iter<500); // we should converge, if not, something went wrong.
-
-  // base case --- update current instance and return
-  if(quality[best_dir] < 0.25*input_size) {
-    points      = std::make_shared<double>(input);
-    num_dims      = k;
-    num_points  = input_size;
-    split_value = (input[split*dim+dir] + input[(split-1)*dim+dir])/2.0;
-    return std::make_shared<SimplifiedKDTree>(this);
-  }
-
-  // we have subtrees
-  if(dir != best_dir) {
-    split = GetBestSplit(input_size, input, best_dir);
-    dir   = best_dir;
-  }
-
-  split_value = (input[split*dim+dir] + input[(split-1)*dim+dir])/2.0;
-  points = nullptr;
-  left = BuildKDTree(k, split, input, dir+1);
-  right = BuildKDTree(k, input_size-split, input, dir+1);
 
 }
-
-*/
 
 //-----------------------------------------------------------------------------
 
 template<typename CoordinateType, typename Compare, typename Iterator>
 int
 SimplifiedKDTree<CoordinateType,Compare,Iterator>::
-GetBestSplit(const Iterator input_b,
-             const Iterator input_e,
+GetBestSplit(const Iterator& input_b,
+             const Iterator& input_e,
              int dir)
 {
 
@@ -340,8 +329,7 @@ GetBestSplit(const Iterator input_b,
   if(input_size<=4) return input_size;
 
   // input could be an bidirectional contianer type (e.g., map, set, etc.)
-  using CoordinateValueType = decltype(GetCoordinate(*input_b));
-  std::vector<CoordinateValueType> points;
+  std::vector<CoordinateContainerType> points;
 
   for(auto it=input_b; it != input_e; ++it)
     points.push_back(GetCoordinate(*it));
@@ -358,19 +346,8 @@ GetBestSplit(const Iterator input_b,
   // are not collocated.
   while(left_split > 0) {
 
-/*
-    const Iterator &lsp  = 
-      std::next(input_b, left_split);
-    const Iterator &lspm = 
-      std::next(input_b, left_split-1);
-    if(GetCoordinate(*lsp)[dir] == GetCoordinate(*lspm)[dir])
-      left_split--;
-    else
-      break;
-*/
-
-    const CoordinateValueType &lsp  = points[left_split];
-    const CoordinateValueType &lspm = points[left_split-1];
+    const CoordinateContainerType &lsp  = points[left_split];
+    const CoordinateContainerType &lspm = points[left_split-1];
     if(lsp[dir] == lspm[dir])
       left_split--;
     else
@@ -382,20 +359,8 @@ GetBestSplit(const Iterator input_b,
   // can not be 0.
   while(right_split < input_size) {
 
-/*
-    const Iterator &rsp  = 
-      std::next(input_b, right_split);
-    const Iterator &rspm = 
-      std::next(input_b, right_split-1);
-
-    if(GetCoordinate(*rsp)[dir] == GetCoordinate(*rspm)[dir])
-      right_split++;
-    else
-      break;
-*/
-
-    const CoordinateValueType &rsp  = points[right_split];
-    const CoordinateValueType &rspm = points[right_split-1];
+    const CoordinateContainerType &rsp  = points[right_split];
+    const CoordinateContainerType &rspm = points[right_split-1];
     if(rsp[dir] == rspm[dir])
       right_split++;
     else
@@ -416,51 +381,28 @@ int
 SimplifiedKDTree<CoordinateType,Compare,Iterator>::
 FindCandidates(const CoordinateType& query, 
                std::vector<CoordinateType>& output,
-               int max_candidates,
-               int depth)
+               int max_candidates) const
 {
-/*
-  // base case
-  if(!has_child) {
 
-    int num_candidates=0;
-    Iterator pit = points_b; // points stored
-    for(; pit!=points_e; ++pit) {
-      for(int k=0; k<num_dims; ++k) {
-        double val = std::abs(GetCoordinate(query)[k]-GetCoordinate(*pit)[k]);
-        local_dist = std::max(local_dist, val);
-      }
+  assert(max_candidates > 0);
 
-      if(local_dist > distance)
-        continue;
-      if(num_candidates >= max_candidates)
-        return max_candidates+1; // found maximum requested candidates.
+  // internal variable
+  CandidatePriorityQueue candidates;
 
-      // update iterators
-      output.push_back(*pit);
-      num_candidates++;
-    }
+  // get all candidates.
+  int num_found = 
+    FindCandidatesImpl(query, candidates, max_candidates);
 
-    assert(num_candidates == output.size());
-
-    return num_candidates;
-
+  output.clear();
+  int counter = 0;
+  while(!candidates.empty() and 
+        counter < num_found) {
+    output.push_back(*candidates.top().second);
+    candidates.pop();
   }
 
-  int num_found = 0;
-
-  // go to left tree if current co-ordinate value is less than
-  // split value.
-  if(query[split_dir] <= split_value and left)
-    num_found = left->FindCandidates(query, output, max_candidates, depth+1);
-
-  // go to the right tree if the current co-ordinate value is 
-  // less than split value.
-  if(query[split_dir] >= split_value)
-    num_found += right->FindCandidates(query, output, max_candidates, depth+1);
-
   return num_found;
-*/
+
 }
 
 //-----------------------------------------------------------------------------
@@ -468,11 +410,69 @@ FindCandidates(const CoordinateType& query,
 template<typename CoordinateType, typename Compare, typename Iterator>
 int
 SimplifiedKDTree<CoordinateType,Compare,Iterator>::
-FindCloseCandidates(const CoordinateType& query, 
-                    std::vector<CoordinateType>& output,
-                    int max_candidates,
-                    double distance)
+FindCandidatesImpl(const CoordinateType& query,
+                   CandidatePriorityQueue& candidates,
+                   int max_candidates,
+                   int depth) const
 {
+
+  // base case
+  if(!has_child) {
+
+    int k;
+    for(k=0; k<num_dims; ++k) {
+      if(GetCoordinate(query)[k] >= low[k] and 
+        GetCoordinate(query)[k] <= upp[k]) {
+        break;
+      }
+    }
+
+    if(k != num_dims)
+      return 0;
+    
+    for(Iterator pit=points_b; pit!=points_e; ++pit) {
+
+      double d = EuclideanDistance(num_dims, 
+                                   GetCoordinate(query), 
+                                   GetCoordinate(*pit));
+
+      // store this point if we have space.
+      if((int)candidates.size() < max_candidates)
+        candidates.push({d, &(*pit)});
+
+      // check if this point is the new "worst"
+      if(d < candidates.top().first) {
+        candidates.pop();
+        candidates.push({d, &(*pit)});
+      }
+
+    }
+
+    return (int)candidates.size();
+
+  }
+
+  bool side = GetCoordinate(query)[split_dir] <= split_value; 
+
+  // see which tree to traverse first
+  using TreeType = SimplifiedKDTree<CoordinateType,Compare,Iterator>;
+  std::shared_ptr<const TreeType> first_branch = (side) ? left : right;
+  std::shared_ptr<const TreeType> second_branch = (side) ? right : left;
+
+  first_branch->FindCandidatesImpl(query, candidates, 
+                                   max_candidates, depth+1);
+
+  double max_dist = ((int)candidates.size() < max_candidates) ? 
+    std::numeric_limits<double>::infinity() : candidates.top().first;
+
+  // go to the second branch if we have space left and
+  // there is a possiblity of finding good points.
+  if((int)candidates.size() < max_candidates or
+     GetCoordinate(query)[split_dir] <= split_value+max_dist)
+    second_branch->FindCandidatesImpl(query, candidates,
+                                      max_candidates, depth+1);
+
+  return (int)candidates.size();
 
 }
 
@@ -484,52 +484,10 @@ SimplifiedKDTree<CoordinateType,Compare,Iterator>::
 FindCandidatesWithin(const CoordinateType& query, 
                      std::vector<CoordinateType>& output,
                      int max_candidates,
-                     double distance)
+                     double distance) const
 {
 
-  // base case
-  if(!has_child) {
-    
-    int num_candidates=0;
-    Iterator pit = points_b; // stored points
-    for(; pit!=points_e; ++pit) {
-      double local_dist = 0;
-      for(int k=0; k<num_dims; ++k) {
-        double val = std::abs(GetCoordinate(query)[k]-GetCoordinate(*pit)[k]);
-        local_dist = std::max(local_dist, val);
-      }
-
-      if(local_dist > distance)
-        continue;
-      if(num_candidates >= max_candidates)
-        return max_candidates+1; // found maximum requested candidates.
-
-      // update output
-      output.push_back(*pit);
-      num_candidates++;
-    }
-
-    assert(num_candidates == output.size());
-
-    return num_candidates;
-
-  }
-
-  int num_found = 0;
-
-  // go to left tree if current co-ordinate value is less than
-  // split value.
-  if(GetCoordinate(query)[split_dir] <= split_value and left)
-    num_found = left->FindCandidatesWithin(query, output, max_candidates,
-                                           distance);
-
-  // go to the right tree if the current co-ordinate value is 
-  // less than split value.
-  if(GetCoordinate(query)[split_dir] >= split_value and right)
-    num_found += right->FindCandidatesWithin(query, output, max_candidates,
-                                             distance);
-
-  return num_found;
+  return 0;
 
 }
 
@@ -542,28 +500,21 @@ SimplifiedKDTree<CoordinateType,Compare,Iterator>::
 FindCandidatesInBox(const CoordinateType& qmin,/* query bounding-box min */
                     const CoordinateType& qmax,/* query bounding-box max*/
                     std::vector<CoordinateType>& output,
-                    int max_candidates)
+                    int max_candidates) const
 {
+
+  return 0;
 
 }
 
 
 //-----------------------------------------------------------------------------
 
+/*
 template<typename CoordinateType, typename Compare, typename Iterator>
 void
 SimplifiedKDTree<CoordinateType,Compare,Iterator>::
-SetBoundingBox()
-{
-
-}
-
-//-----------------------------------------------------------------------------
-
-template<typename CoordinateType, typename Compare, typename Iterator>
-void
-SimplifiedKDTree<CoordinateType,Compare,Iterator>::
-Print(std::ostream &os, int depth)
+Print(std::ostream &os, int depth) const
 {
 
   std::string indent(depth, '  ');
@@ -592,16 +543,17 @@ Print(std::ostream &os, int depth)
   }
 
 }
+*/
 
 //-----------------------------------------------------------------------------
 
-template<typename CoordinateValueType>
+template<typename CoordinateContainerType>
 class DefaultComparator {
   int dir;
 public:
   DefaultComparator(int d) : dir(d) { }
-  bool operator()(const CoordinateValueType &lhs, 
-                  const CoordinateValueType &rhs) const {
+  bool operator()(const CoordinateContainerType &lhs, 
+                  const CoordinateContainerType &rhs) const {
     return lhs[dir] < rhs[dir];
   }
 };
