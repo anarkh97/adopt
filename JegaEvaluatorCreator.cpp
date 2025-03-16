@@ -25,5 +25,5 @@ GeneticAlgorithmEvaluator*
 JegaEvaluatorCreator::CreateEvaluator(GeneticAlgorithm &alg)
 {
   EDDY_FUNC_DEBUGSCOPE
-  return new JegaEvaluator(alg, sim_model, error_model);
+  return new JegaEvaluator(alg, sim_model, error_model, decision_maker);
 }

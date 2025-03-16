@@ -2,7 +2,6 @@
 #define _ADAPTIVE_DECISION_MAKER_H_
 
 #include<array>
-#include<KDTree.h>
 
 // Dakota includes
 #include<dakota_global_defs.hpp>
@@ -31,7 +30,7 @@ class AdaptiveDecisionMaker {
 
 public:
 
-  AdaptiveDecisionMaker(int var_dim);
+  AdaptiveDecisionMaker();
   ~AdaptiveDecisionMaker() { };
 
   //! Iterating functions

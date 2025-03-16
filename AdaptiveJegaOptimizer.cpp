@@ -27,18 +27,18 @@
 #include<model_utils.hpp>
 
 // Eddy utility includes.
-#include <utilities/include/EDDY_DebugScope.hpp>
+#include<utilities/include/EDDY_DebugScope.hpp>
 
 // JEGA utility includes.
-#include <../Utilities/include/DesignGroup.hpp>
-#include <../Utilities/include/ConstraintInfo.hpp>
-#include <../Utilities/include/ParameterExtractor.hpp>
-#include <../Utilities/include/BasicParameterDatabaseImpl.hpp>
-#include <../Utilities/include/MultiObjectiveStatistician.hpp>
-#include <../Utilities/include/SingleObjectiveStatistician.hpp>
+#include<../Utilities/include/DesignGroup.hpp>
+#include<../Utilities/include/ConstraintInfo.hpp>
+#include<../Utilities/include/ParameterExtractor.hpp>
+#include<../Utilities/include/BasicParameterDatabaseImpl.hpp>
+#include<../Utilities/include/MultiObjectiveStatistician.hpp>
+#include<../Utilities/include/SingleObjectiveStatistician.hpp>
 
-#include <algorithm>
-#include <sstream>
+#include<algorithm>
+#include<sstream>
 
 using namespace std;
 using namespace Dakota;
@@ -68,7 +68,8 @@ AdaptiveJegaOptimizer::AdaptiveJegaOptimizer(ProblemDescDB &prob_db,
                      : Optimizer(prob_db, sim_model, /*propagate the true model to Dakota*/
                                  std::shared_ptr<AdaptiveJegaTraits>(
                                  new AdaptiveJegaTraits())),
-                       param_db(nullptr), eval_creator(nullptr)
+                       param_db(nullptr), eval_creator(nullptr), 
+                       decision_maker(nullptr)
 {
 
   EDDY_FUNC_DEBUGSCOPE
@@ -131,8 +132,18 @@ AdaptiveJegaOptimizer::AdaptiveJegaOptimizer(ProblemDescDB &prob_db,
   int pop_size = prob_db.get_int("method.population_size");
   maxEvalConcurrency *= pop_size;
 
-  // iteratedModel is the sim_model set internally by DakotaOptimizer
-  eval_creator = make_shared<JegaEvaluatorCreator>(*iteratedModel, *error_model);
+  // Create the adaptive decision maker object
+  // Chose to instantiate here so that we can pass
+  // user I/O objects here.
+  decision_maker = 
+    make_shared<AdaptiveDecisionMaker>();
+
+  // iteratedModel is the sim_model set internally 
+  // by DakotaOptimizer
+  eval_creator = 
+    make_shared<JegaEvaluatorCreator>(*iteratedModel, 
+                                      *error_model,
+                                      *decision_maker);
   
 }
 

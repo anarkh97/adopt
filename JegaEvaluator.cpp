@@ -82,7 +82,9 @@ GeneticAlgorithmOperator*
 JegaEvaluator::Clone(GeneticAlgorithm &algorithm) const
 {
   EDDY_FUNC_DEBUGSCOPE
-  return new JegaEvaluator(*this, algorithm, sim_model, error_model);
+  return new JegaEvaluator(*this, algorithm, 
+                           sim_model, error_model,
+                           decision_maker);
 }
 
 //-----------------------------------------------------------------------------

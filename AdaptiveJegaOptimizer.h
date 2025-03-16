@@ -1,10 +1,13 @@
 #ifndef _ADAPTIVE_JEGA_OPTIMIZER_H_
 #define _ADAPTIVE_JEGA_OPTIMIZER_H_
 
+//! Optimization related headers
 #include<JEGAOptimizer.hpp>
 #include<JegaEvaluatorCreator.h>
 #include<JegaEvaluator.h>
 #include<JegaDriver.h>
+//! Surrogate model related headers
+#include<AdaptiveDecisionMaker.h>
 
 /*****************************************************
  *  This class extends JEGAOptimizer, Dakota's 
@@ -24,16 +27,16 @@
 
 class AdaptiveJegaOptimizer : public Dakota::Optimizer {
 
-  std::shared_ptr<JEGA::Utilities::ParameterDatabase> 
-    param_db; 
+  std::shared_ptr<JEGA::Utilities::ParameterDatabase> param_db; 
   std::shared_ptr<JegaEvaluatorCreator> eval_creator;
+  std::shared_ptr<AdaptiveDecisionMaker> decision_maker;
 
 public:
 
   //! Default constructor
   AdaptiveJegaOptimizer(Dakota::ProblemDescDB& prob_db, 
                         std::shared_ptr<Dakota::Model> sim_model,
-			std::shared_ptr<Dakota::Model> error_model);
+                        std::shared_ptr<Dakota::Model> error_model);
 
   //! Default Destructor -- Calls ~Optimizer automatically
   ~AdaptiveJegaOptimizer() override;
@@ -58,10 +61,12 @@ private:
   //! MOGA functionality has been removed for now.
   void GetBestSOSolutions(const JEGA::Utilities::DesignOFSortSet& from,
                           const JEGA::Algorithms::GeneticAlgorithm& ga,
-			  std::multimap<Dakota::RealRealPair, JEGA::Utilities::Design*>&);
+                          std::multimap<Dakota::RealRealPair, 
+                                        JEGA::Utilities::Design*>&);
 
   void LoadDakotaResponses(const JEGA::Utilities::Design& from, 
-                           Dakota::Variables& vars, Dakota::Response& resp) const;
+                           Dakota::Variables& vars, 
+                           Dakota::Response& resp) const;
 
 };
 
