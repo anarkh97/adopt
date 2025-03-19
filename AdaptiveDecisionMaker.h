@@ -8,8 +8,8 @@
 #include<dakota_data_types.hpp>
 #include<SurrogatesGaussianProcess.hpp>
 
-// Forward decleration for KDTree
-template <int dim> class PointInND;
+// Eigen includes.
+#include<Eigen/Dense>
 
 /************************************************
  *
@@ -17,16 +17,18 @@ template <int dim> class PointInND;
 
 class AdaptiveDecisionMaker {
 
+  //! flag to switch on the GP model.
+  bool readyToPredict;
+
   //! Database containers
-  Dakota::IntRealVectorMap true_evals;
+  Dakota::IntRealVectorMap true_evals; // internal var.
   Dakota::IntRealVectorMap approx_evals; // internal var.
   Dakota::IntRealMap       error_vals; // internal var. 
 
   //! Gaussian regression model --- operates on approximation errors.
   dakota::surrogates::GaussianProcess gp_model;
 
-  //! Neighbor search model
-
+  //! Neighbor search model --- (AN) currently using naive search
 
 public:
 
@@ -58,22 +60,23 @@ public:
   //! Functions related to training and model assessment
   void Train();
 
-};
+private:
 
-//-----------------------------------------------------------------------------
-// An instantiation of "Obj" in KDTree.h
+  //! Helper functions to interface with dakota::surrogates
+  void LoadGaussianProcesssOptions();
+  //! (re-)builds the GaussianProcess model
+  double BuildGaussianProcessModel(const Eigen::MatrixXd& samples,
+                                   const Eigen::VectorXd& values,
+                                   const double split_ratio=0.0,
+                                   /* default value of dakota::surrogates*/
+                                   const size_t seed=42); 
+  void CrossValidateGausssianModel() const;
 
-template <int dim>
-class PointInND {
-public:
-  int id;
-  std::array<double, dim> x;
-public:
-  PointInND() : id(0), x({}) { };
-  PointInND(int i, std::array<double,dim> &xin) : id(i), x(xin) { }
-  double val(int i) const { return x[i]; }
-  double width(int i) const { return 0.0; }
-  int pid() const { return id; }
+  void LoadParameters(const Dakota::IntRealVectorMap& from, 
+                      Eigen::MatrixXd& into) const;
+  void LoadResponses(const Dakota::IntRealMap& from, 
+                     Eigen::VectorXd& into) const;
+
 };
 
 //-----------------------------------------------------------------------------
