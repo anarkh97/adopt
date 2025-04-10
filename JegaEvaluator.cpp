@@ -162,23 +162,23 @@ JegaEvaluator::SetStateVariables(const RealVector& cont_vars,
 /*
   size_t num_dsv  = ModelUtils::dsv(sim_model);
   size_t num_idsv = ModelUtils::idsv(sim_model);
-  size_t num_adsv = ModelUtils::adsv(sim_model);
+  size_t num_idsv = ModelUtils::idsv(sim_model);
 
   Cout << "[Active]Discrete String variables = " << num_dsv << "\n"
        << "[Inactive]Discrete String variables = " << num_idsv << "\n"
-       << "[Total]Discrete String variables = " << num_adsv << "\n";
+       << "[Total]Discrete String variables = " << num_idsv << "\n";
   abort_handler(OTHER_ERROR);
 */
 
-  size_t num_cv    = ModelUtils::cv(sim_model);
-  size_t num_idiv  = ModelUtils::idiv(sim_model);
-  size_t num_idsv  = ModelUtils::idsv(sim_model);
+  size_t num_cv   = ModelUtils::cv(sim_model);
+  size_t num_icv  = ModelUtils::idiv(sim_model);
+  size_t num_idsv = ModelUtils::idsv(sim_model);
 
   EDDY_ASSERT(cont_vars.length() == num_cv);
 
   // allocate memory for arrays handled by this function.
-  if(into_disc_int.length() != num_idiv) 
-    into_disc_int.size(num_idiv);
+  if(into_disc_int.length() != num_icv) 
+    into_disc_int.size(num_icv);
 
   if(into_disc_string.num_elements() != num_idsv) {
     StringMultiArray::extent_gen extents;
@@ -187,14 +187,14 @@ JegaEvaluator::SetStateVariables(const RealVector& cont_vars,
   
   // Prepare to set inactive (state) discrete string set variable
   StringMultiArrayConstView disc_string_labels = 
-    ModelUtils::inactive_discrete_string_variable_labels(sim_model);
+    ModelUtils::all_discrete_string_variable_labels(sim_model);
   bool found_label = false;
 
   // Set inactive discrete string set variable -> Evaluation Type
   // Set inactive discrete integer variable -> Neighbor evaluation IDs.  
   if(!error_flag) {
 
-    decision_maker.GetNearestNeighbors(cont_vars, into_disc_int, num_idiv);
+    decision_maker.GetNearestNeighbors(cont_vars, into_disc_int, num_icv);
     bool eval_decision = 
       decision_maker.GetEvaluationDecision(cont_vars);
 
@@ -206,7 +206,7 @@ JegaEvaluator::SetStateVariables(const RealVector& cont_vars,
       if(label == "SWITCH") {
         into_disc_string[i] = (eval_decision) ? "TRUE" : "APPROX";
         found_label         = true;
-	break;
+	      break;
       }
 
     }
@@ -214,8 +214,9 @@ JegaEvaluator::SetStateVariables(const RealVector& cont_vars,
   }
   else {
     // Function was called for error_model
+
     decision_maker.GetNearestNeighbors(cont_vars,
-      into_disc_int, num_idiv, true /*force-find*/);
+      into_disc_int, num_icv, true /*force-find*/);
 
     // Pass Error flag to the analysis driver 
     // through discrete string set
@@ -225,7 +226,7 @@ JegaEvaluator::SetStateVariables(const RealVector& cont_vars,
       if(label == "SWITCH") {
         into_disc_string[i] = "ERROR";
         found_label         = true;
-	break;
+	      break;
       }
 
     }
@@ -294,7 +295,7 @@ JegaEvaluator::RecordEvaluationInDecisionMaker(const int id,
 
   // Prepare to set inactive (state) discrete string set variable
   StringMultiArrayConstView disc_string_labels = 
-    ModelUtils::inactive_discrete_string_variable_labels(sim_model);
+    ModelUtils::all_discrete_string_variable_labels(sim_model);
   bool found_label = false;
 
   for(size_t i=0; i<num_idsv; ++i) {
@@ -302,7 +303,7 @@ JegaEvaluator::RecordEvaluationInDecisionMaker(const int id,
     const auto &label = disc_string_labels[i];
     if(label == "SWITCH") {
       eval_decision = (disc_strings[i] == "TRUE");
-      found_label         = true;
+      found_label   = true;
       break;
     }
 
@@ -317,7 +318,7 @@ JegaEvaluator::RecordEvaluationInDecisionMaker(const int id,
 
   // Update the decision maker w/ evaluation id and variables.
   decision_maker.RecordEvaluationDecision(id, cont_vars, eval_decision);
-  
+
 }
 
 //-----------------------------------------------------------------------------
@@ -569,6 +570,11 @@ JegaEvaluator::Evaluate(DesignGroup &group)
       decision_maker.GetBeginForTrueDatabase());
     const IntRealVectorMap::const_iterator tr_e(
       decision_maker.GetEndForTrueDatabase());
+
+    JEGALOG_II(GetLogger(), ldebug(), this,
+      text_entry(ldebug(), GetName() + ": Performing group error evaluation. "
+                 + std::to_string(decision_maker.GetTrueDatabaseSize())))
+
     for(; tr_it!=tr_e; ++tr_it) {
 
       // Note: We assume that the designs have already been evaluated. Furthermore, 

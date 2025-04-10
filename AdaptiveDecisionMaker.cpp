@@ -157,7 +157,13 @@ AdaptiveDecisionMaker::RecordEvaluationDecision(int eval_id,
                                                 const bool eval_type)
 {
 
-  if(eval_type == true) {
+  Cout << "Evaluation " << eval_id << " with evaluation type "
+       << ((eval_type) ? "TRUE" : "APPROX") << "\n";
+
+  if(eval_type) {
+
+    Cout << "Adding evaluation " << eval_id << " to true database.\n";
+
     // First check if evaluation id has already been mapped or not.
     IntRealVectorMap::iterator it = true_evals.find(eval_id);
     if(it != true_evals.end()) {

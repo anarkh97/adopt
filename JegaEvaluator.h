@@ -92,8 +92,8 @@ protected:
 
   void SetStateVariables(const Dakota::RealVector& cont_vars,
                          Dakota::IntVector& into_disc_int,
-			 Dakota::StringMultiArray& into_disc_string,
-			 const bool error_flag=false);
+			                   Dakota::StringMultiArray& into_disc_string,
+			                   const bool error_flag=false);
 
   void RecordResponses(const Dakota::RealVector& from, 
                        JEGA::Utilities::Design& into) const;

@@ -22,6 +22,8 @@
 
 class DakotaEnvironmentWrapper : public Dakota::LibraryEnvironment {
 
+  bool adaptive_optimization;
+
 public:
 
   DakotaEnvironmentWrapper(Dakota::ProgramOptions options = Dakota::ProgramOptions(),
@@ -31,8 +33,8 @@ public:
 
   DakotaEnvironmentWrapper(Dakota::MPI_Comm dakota_comm,
                            Dakota::ProgramOptions options = Dakota::ProgramOptions(),
-			   bool check_bcast_construct = true,
-			   Dakota::DbCallbackFunctionPtr callback = nullptr,
+                  			   bool check_bcast_construct = true,
+			                     Dakota::DbCallbackFunctionPtr callback = nullptr,
                            void* callback_data = nullptr);
 
   //! Object deletion left to LibraryEnvironment for now
@@ -41,6 +43,7 @@ public:
 private:
 
   void SetupAdaptiveOptimizer();
+  void SetupAdaptiveOptimizationVariables();
 
 };
 

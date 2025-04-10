@@ -36,6 +36,7 @@ public:
   ~AdaptiveDecisionMaker() { };
 
   //! Iterating functions
+  size_t GetTrueDatabaseSize() const { return true_evals.size(); }
   Dakota::IntRealVectorMap::iterator GetBeginForTrueDatabase();
   Dakota::IntRealVectorMap::const_iterator GetBeginForTrueDatabase() const;
 

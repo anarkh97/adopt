@@ -10,29 +10,112 @@ using namespace Dakota;
 
 //-----------------------------------------------------------------------------
 
-DakotaEnvironmentWrapper::DakotaEnvironmentWrapper(ProgramOptions options,
-                                                   bool check_bcast_construct,
-                                                   DbCallbackFunctionPtr callback,
-                                                   void *callback_data)
-                        : LibraryEnvironment(options, check_bcast_construct)
+DakotaEnvironmentWrapper::
+DakotaEnvironmentWrapper(ProgramOptions options,
+                         bool check_bcast_construct,
+                         DbCallbackFunctionPtr callback,
+                         void *callback_data)
+: LibraryEnvironment(options, check_bcast_construct),
+  adaptive_optimization(false)
 {
   
+  if(!check_bcast_construct)
+    done_modifying_db();
+
+  SetupAdaptiveOptimizationVariables();
   SetupAdaptiveOptimizer();
 
+  if(adaptive_optimization) {
+    Cout << "\n";
+    Cout << "----------------------------\n";
+    Cout << "--        SOGA-Ad.        --\n";
+    Cout << "----------------------------\n";
+  }
+  
 }
 
 //-----------------------------------------------------------------------------
 
-DakotaEnvironmentWrapper::DakotaEnvironmentWrapper(MPI_Comm dakota_comm,
-                                                   ProgramOptions options,
-                                                   bool check_bcast_construct,
-                                                   DbCallbackFunctionPtr callback,
-                                                   void *callback_data)
-                        : LibraryEnvironment(
-                            dakota_comm, options, check_bcast_construct)
+DakotaEnvironmentWrapper::
+DakotaEnvironmentWrapper(MPI_Comm dakota_comm,
+                         ProgramOptions options,
+                         bool check_bcast_construct,
+                         DbCallbackFunctionPtr callback,
+                         void *callback_data)
+: LibraryEnvironment(dakota_comm, options, check_bcast_construct),
+  adaptive_optimization(false)
 {
 
+  if(!check_bcast_construct)
+    done_modifying_db();
+
+  SetupAdaptiveOptimizationVariables();
   SetupAdaptiveOptimizer();
+
+  if(adaptive_optimization) {
+    Cout << "\n";
+    Cout << "----------------------------\n";
+    Cout << "--        SOGA-Ad.        --\n";
+    Cout << "----------------------------\n";
+  }
+  
+}
+
+//-----------------------------------------------------------------------------
+
+void DakotaEnvironmentWrapper::SetupAdaptiveOptimizationVariables()
+{
+
+  //! Get world rank from Dakota
+  ParallelLibrary &parallel_lib = parallel_library();
+  int world_rank = parallel_lib.world_rank();
+
+  //! Here we get the user inputs for discrete string state set variables.
+  //! If the user specified the keyword "SWITCH" then we infer that the
+  //! user wants to perform our adaptive optimization. We also infer that
+  //! number of continuous state variables is the number of points for
+  //! interpolation.
+  
+  ProblemDescDB &problem_db = problem_description_db();
+  shared_ptr<Model> top_model = topLevelIterator.iterated_model();
+
+  //! Get method and model information
+  const String &top_method_name = topLevelIterator.method_string();
+  const String &top_model_type = top_model->model_type();
+
+  //! handle trivial case
+  if(top_method_name != "soga" and top_model_type != "recast")
+    return;
+
+  //---------------------------------------------------------------------------
+  // Optimization with Single Objective Genetic Algorithm
+  //---------------------------------------------------------------------------
+
+  //! Correct the inactive view to STATE
+  Variables &top_model_vars = top_model->current_variables();
+  top_model_vars.inactive_view(MIXED_STATE);
+
+  //! Check for ADAPTIVE OPTIMIZATION
+  StringMultiArrayConstView state_string_labels = 
+    ModelUtils::inactive_discrete_string_variable_labels(*top_model);
+
+  for(const auto &label : state_string_labels) {
+    if(label == "SWITCH") {
+      adaptive_optimization = true;
+      break;
+    }
+  }
+
+  //! Change continuous STATE variable labels for SOFICS
+  size_t num_icv = ModelUtils::icv(*top_model);
+  StringMultiArray new_state_var_labels(boost::extents[num_icv]);
+  for(size_t i=0; i<num_icv; ++i)
+    new_state_var_labels[i] = "NEIGHBOR_" + std::to_string(i+1);
+  
+  StringMultiArrayConstView state_var_view = 
+    new_state_var_labels[boost::indices[idx_range(0,num_icv)]];
+  ModelUtils::inactive_continuous_variable_labels(*top_model, 
+    state_var_view);
 
 }
 
@@ -41,87 +124,43 @@ DakotaEnvironmentWrapper::DakotaEnvironmentWrapper(MPI_Comm dakota_comm,
 void DakotaEnvironmentWrapper::SetupAdaptiveOptimizer()
 {
   
-  // reset the model to our model if top method is soga
-  String top_method_name = topLevelIterator.method_string();
+  //! Get world rank from Dakota
+  ParallelLibrary &parallel_lib = parallel_library();
+  int world_rank = parallel_lib.world_rank();
 
-  // calling it here explicitly to make things clear and readable.
+  //! Get problem description database and iterated model 
+  //! attached to the top method pointer.
   ProblemDescDB &problem_db = problem_description_db();
   shared_ptr<Model> top_model = topLevelIterator.iterated_model();
 
-  const String& top_model_type = top_model->model_type();
+  //----------------------------------------------------------------------------
+  // Setup top method iterator
+  //---------------------------------------------------------------------------
 
-  if(top_method_name == "soga" and top_model_type == "simulation") {
+  if(adaptive_optimization) {
+  
+    //! Reference for reseting communicator
+    ParLevLIter w_pl_iter = parallel_lib.w_parallel_level_iterator();
+  
+    //! Create a new Dakota Model for error evaluations.
+    shared_ptr<Model> err_model = ModelUtils::get_model(problem_db);
+  
+    //! Reset to our own interface. This is done to distinguish
+    //! working directories of true models and error models.
+    Interface &err_model_interface = err_model->derived_interface();   
+    err_model_interface.assign_rep(
+      std::make_shared<ForkApplicInterfaceWrapper>(problem_db));
+  
+    //! Assign our optimizer.
+    topLevelIterator.assign_rep(
+      make_shared<AdaptiveJegaOptimizer>(problem_db, top_model, err_model));
 
-    // ProblemDescDB::set does not allow tinkering of analysis
-    // drivers. So, we simply create a new Model with the same
-    // interface. We handle different kinds of evaluations 
-    // in the driver through STATE variables.
-    // check if a string set of state variables was defined.
-/*
-    StringSetArray string_sets = ModelUtils::discrete_set_string_values(
-      *top_model, Dakota::MIXED_STATE);
-
-    bool perform_adaptive_optimization = false;
-
-    if(!string_sets.empty()) {
-
-      // We are looking for a string set whose permissible values are
-      // "TRUE", "APPROX", and "ERROR".
-      int num_matches = 0;
-      for(auto &sets : string_sets) {
-        if(sets.size() > 3) continue;
-
-	for(auto &val : sets)
-          if(val == "TRUE" or val == "APPROX" or val == "ERROR")
-            num_matches++;
-      }
-
-      // we found all three keyword, so we assume that the user
-      // wants to perform our adaptive optimization.
-      perform_adaptive_optimization = true;
-
-    }
-*/
-
-    bool perform_adaptive_optimization = false;
-    StringMultiArrayConstView disc_string_labels =
-      ModelUtils::all_discrete_string_variable_labels(
-        *top_model);
-
-    for(const auto &label : disc_string_labels) {
-      if(label == "SWITCH") 
-        perform_adaptive_optimization = true;
-    }
-
-    if(perform_adaptive_optimization) {
-
-      // get the communicator attached to environment
-      ParallelLibrary &parallel_lib = parallel_library();
-      ParLevLIter w_pl_iter = parallel_lib.w_parallel_level_iterator();
-
-      Cout << "\n";
-      Cout << "----------------------------\n";
-      Cout << "--        SOGA-Ad.        --\n";
-      Cout << "----------------------------\n";
-
-      shared_ptr<Model> err_model =
-        ModelUtils::get_model(problem_db);
-
-      // Reset to our own interface. This is done to distinguish
-      // working directories of true models and error models.
-      Interface &err_model_interface = err_model->derived_interface();   
-      err_model_interface.assign_rep(
-        std::make_shared<ForkApplicInterfaceWrapper>(problem_db));
-
-      // assign our optimizer.
-      topLevelIterator.assign_rep(
-        make_shared<AdaptiveJegaOptimizer>(problem_db, top_model, err_model));
-      topLevelIterator.init_communicators(w_pl_iter);
-
-    }
+    //! Reset communicator
+    topLevelIterator.init_communicators(w_pl_iter);
+  
   }
 
-  abort_handler(OTHER_ERROR);
+  //abort_handler(OTHER_ERROR);
 
 }
 

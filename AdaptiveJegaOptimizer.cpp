@@ -263,10 +263,12 @@ void AdaptiveJegaOptimizer::LoadParameterDatabase()
 
   // now all the reals
   const Real& constraint_penalty = prob_db.get_real("method.constraint_penalty");
+  // HARD CODED as there is some bug in DAKOTA.
   if (constraint_penalty >= 0.)
-    param_db->AddDoubleParam("method.constraint_penalty", constraint_penalty);
+    //param_db->AddDoubleParam("method.constraint_penalty", constraint_penalty);
+    param_db->AddDoubleParam("method.constraint_penalty", 10.0);
   else
-     param_db->AddDoubleParam("method.constraint_penalty", 1.0);
+    param_db->AddDoubleParam("method.constraint_penalty", 10.0);
 
   const Real& crossover_rate = prob_db.get_real("method.crossover_rate");
   if (crossover_rate >= 0.)
