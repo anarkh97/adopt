@@ -25,6 +25,27 @@ JegaEvaluator::JegaEvaluator(GeneticAlgorithm &algorithm,
                error_model(emodel_), decision_maker(decision_maker_)
 {
   EDDY_FUNC_DEBUGSCOPE
+
+  StringMultiArrayConstView disc_string_labels = 
+    ModelUtils::inactive_discrete_string_variable_labels(sim_model);
+  
+  size_t idx_cntr=0;
+  switch_label_idx=-1;
+  for(const auto &label : disc_string_labels) {
+
+    if(label == "SWITCH") {
+      switch_label_idx = idx_cntr;
+      break;
+    }
+
+  }
+
+  if(switch_label_idx<0) {
+    JEGALOG_II_G_F(this, text_entry(lfatal(),
+                 "Adaptive JEGA Error: Optimizer requires a "
+                 "discrete string set state variable with "
+                 "label \"SWITCH\".\n"))
+  }
 }
 
 //-----------------------------------------------------------------------------
@@ -34,6 +55,7 @@ JegaEvaluator::JegaEvaluator(const JegaEvaluator &copy)
                error_model(copy.error_model), decision_maker(copy.decision_maker)
 {
   EDDY_FUNC_DEBUGSCOPE
+  SetupLabelIndex();
 }
 
 //-----------------------------------------------------------------------------
@@ -47,6 +69,35 @@ JegaEvaluator::JegaEvaluator(const JegaEvaluator &copy,
                error_model(emodel_), decision_maker(decision_maker_)
 {
   EDDY_FUNC_DEBUGSCOPE
+  SetupLabelIndex();
+}
+
+//-----------------------------------------------------------------------------
+
+void JegaEvaluator::SetupLabelIndex()
+{
+  EDDY_FUNC_DEBUGSCOPE
+
+  StringMultiArrayConstView disc_string_labels = 
+    ModelUtils::inactive_discrete_string_variable_labels(sim_model);
+  
+  size_t idx_cntr=0;
+  switch_label_idx=-1;
+  for(const auto &label : disc_string_labels) {
+
+    if(label == "SWITCH") {
+      switch_label_idx = idx_cntr;
+      break;
+    }
+
+  }
+
+  if(switch_label_idx<0) {
+    JEGALOG_II_G_F(this, text_entry(lfatal(),
+                 "Adaptive JEGA Error: Optimizer requires a "
+                 "discrete string set state variable with "
+                 "label \"SWITCH\".\n"))
+  }
 }
 
 //-----------------------------------------------------------------------------
@@ -153,22 +204,11 @@ const
 
 void
 JegaEvaluator::SetStateVariables(const RealVector& cont_vars, 
-                                 IntVector &into_disc_int,
+                                 RealVector &into_disc_cont,
                                  StringMultiArray &into_disc_string,
                                  const bool error_flag)
 {
-    EDDY_FUNC_DEBUGSCOPE
-
-/*
-  size_t num_dsv  = ModelUtils::dsv(sim_model);
-  size_t num_idsv = ModelUtils::idsv(sim_model);
-  size_t num_idsv = ModelUtils::idsv(sim_model);
-
-  Cout << "[Active]Discrete String variables = " << num_dsv << "\n"
-       << "[Inactive]Discrete String variables = " << num_idsv << "\n"
-       << "[Total]Discrete String variables = " << num_idsv << "\n";
-  abort_handler(OTHER_ERROR);
-*/
+  EDDY_FUNC_DEBUGSCOPE
 
   size_t num_cv   = ModelUtils::cv(sim_model);
   size_t num_icv  = ModelUtils::idiv(sim_model);
@@ -177,69 +217,39 @@ JegaEvaluator::SetStateVariables(const RealVector& cont_vars,
   EDDY_ASSERT(cont_vars.length() == num_cv);
 
   // allocate memory for arrays handled by this function.
-  if(into_disc_int.length() != num_icv) 
-    into_disc_int.size(num_icv);
+  if(into_disc_cont.length() != num_icv) 
+    into_disc_cont.size(num_icv);
 
   if(into_disc_string.num_elements() != num_idsv) {
     StringMultiArray::extent_gen extents;
     into_disc_string.resize(extents[num_idsv]);
   }
   
-  // Prepare to set inactive (state) discrete string set variable
-  StringMultiArrayConstView disc_string_labels = 
-    ModelUtils::all_discrete_string_variable_labels(sim_model);
-  bool found_label = false;
-
   // Set inactive discrete string set variable -> Evaluation Type
   // Set inactive discrete integer variable -> Neighbor evaluation IDs.  
   if(!error_flag) {
 
-    decision_maker.GetNearestNeighbors(cont_vars, into_disc_int, num_icv);
+    decision_maker.GetNearestNeighbors(cont_vars, into_disc_cont, num_icv);
     bool eval_decision = 
       decision_maker.GetEvaluationDecision(cont_vars);
 
     // Pass evaluation decision to the analysis driver 
     // through discrete string set
-    for(size_t i=0; i<num_idsv; ++i) {
-
-      const auto &label = disc_string_labels[i];
-      if(label == "SWITCH") {
-        into_disc_string[i] = (eval_decision) ? "TRUE" : "APPROX";
-        found_label         = true;
-	      break;
-      }
-
-    }
+    into_disc_string[switch_label_idx] = (eval_decision) ? "TRUE" : "APPROX";
 
   }
   else {
     // Function was called for error_model
 
     decision_maker.GetNearestNeighbors(cont_vars,
-      into_disc_int, num_icv, true /*force-find*/);
+      into_disc_cont, num_icv, true /*force-find*/);
 
     // Pass Error flag to the analysis driver 
     // through discrete string set
-    for(size_t i=0; i<num_idsv; ++i) {
-
-      const auto &label = disc_string_labels[i];
-      if(label == "SWITCH") {
-        into_disc_string[i] = "ERROR";
-        found_label         = true;
-	      break;
-      }
-
-    }
+    into_disc_string[switch_label_idx] = "ERROR";
 
   }
   
-  if(!found_label) {
-    JEGALOG_II_G_F(this, text_entry(lfatal(),
-                 "Adaptive JEGA Error: Optimizer requires a "
-                 "discrete string set state variable with "
-                 "label \"SWITCH\".\n"))
-  }
-
 }
 
 //-----------------------------------------------------------------------------
@@ -289,32 +299,7 @@ JegaEvaluator::RecordEvaluationInDecisionMaker(const int id,
   EDDY_FUNC_DEBUGSCOPE
 
   // Identify the decision for current evaluation ID 
-
-  bool eval_decision = true;
-  size_t num_idsv    = ModelUtils::idsv(sim_model);
-
-  // Prepare to set inactive (state) discrete string set variable
-  StringMultiArrayConstView disc_string_labels = 
-    ModelUtils::all_discrete_string_variable_labels(sim_model);
-  bool found_label = false;
-
-  for(size_t i=0; i<num_idsv; ++i) {
-
-    const auto &label = disc_string_labels[i];
-    if(label == "SWITCH") {
-      eval_decision = (disc_strings[i] == "TRUE");
-      found_label   = true;
-      break;
-    }
-
-  }
-
-  if(!found_label) {
-    JEGALOG_II_G_F(this, text_entry(lfatal(),
-                 "Adaptive JEGA Error: Optimizer requires a "
-                 "discrete string set state variable with "
-                 "label \"SWITCH\".\n"))
-  }
+  bool eval_decision = (disc_strings[switch_label_idx] == "TRUE");
 
   // Update the decision maker w/ evaluation id and variables.
   decision_maker.RecordEvaluationDecision(id, cont_vars, eval_decision);
@@ -349,8 +334,7 @@ JegaEvaluator::RecordErrorInDecisionMaker(const int id, /* evaluation id from tr
   if(!found_label) {
     JEGALOG_II_G_F(this, text_entry(lfatal(),
                  "Adaptive JEGA Error: Optimizer requires a "
-                 "discrete string set state variable with "
-                 "label \"SWITCH\".\n"))
+                 "metadata with label \"MSE\".\n"))
   }
 
 }
@@ -376,13 +360,13 @@ JegaEvaluator::Evaluate(DesignGroup &group)
   // we'll prepare containers for repeated use without re-construction
   RealVector       continuous_variables;
 /*
-  IntVector        disc_int_vars;
+  RealVector        disc_int_vars;
   RealVector       disc_real_vars;
   StringMultiArray disc_string_vars;
 */
 
   // arrays/vectors for adaptive decision model
-  IntVector        state_int_vars;
+  RealVector       state_int_vars;
   StringMultiArray state_string_vars; // "ERROR", "APPROX", "TRUE"
 
   // prepare to iterate over the group
@@ -457,7 +441,7 @@ JegaEvaluator::Evaluate(DesignGroup &group)
     // Pass decision to analysis driver.
     //=========================================================================
     SetStateVariables(continuous_variables, state_int_vars, state_string_vars);
-    ModelUtils::inactive_discrete_int_variables(sim_model, state_int_vars);
+    ModelUtils::inactive_continuous_variables(sim_model, state_int_vars);
     const size_t idsv_len = state_string_vars.num_elements();
     StringMultiArrayConstView idsv_view = state_string_vars[
       boost::indices[idx_range(0,idsv_len)]];
@@ -604,7 +588,7 @@ JegaEvaluator::Evaluate(DesignGroup &group)
       // Pass error flag to analysis driver.
       //========================================================================
       SetStateVariables(tr_it->second, state_int_vars, state_string_vars, true); 
-      ModelUtils::inactive_discrete_int_variables(error_model, state_int_vars);
+      ModelUtils::inactive_continuous_variables(error_model, state_int_vars);
       const size_t idsv_len = state_string_vars.num_elements();
       StringMultiArrayConstView idsv_view = state_string_vars[
         boost::indices[idx_range(0,idsv_len)]];

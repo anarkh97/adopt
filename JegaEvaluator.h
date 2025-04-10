@@ -30,6 +30,8 @@ class JegaEvaluator : public JEGA::Algorithms::GeneticAlgorithmEvaluator {
 
 private:
 
+  size_t switch_label_idx;
+
   Dakota::Model& sim_model;
   Dakota::Model& error_model;
 
@@ -39,7 +41,7 @@ public:
 
   static const std::string& Name() {
     EDDY_FUNC_DEBUGSCOPE
-    static const std::string ret("ADAPTIVE JEGA Evaluator");
+    static const std::string ret("Adaptive JEGA Evaluator");
     return ret;
   } 
 
@@ -91,7 +93,7 @@ protected:
                          Dakota::RealVector& into_cont) const;
 
   void SetStateVariables(const Dakota::RealVector& cont_vars,
-                         Dakota::IntVector& into_disc_int,
+                         Dakota::RealVector& into_disc_cont,
 			                   Dakota::StringMultiArray& into_disc_string,
 			                   const bool error_flag=false);
 
@@ -113,6 +115,8 @@ protected:
   std::size_t GetNumberLinearConstraints() const;
 
 private:
+
+  void SetupLabelIndex();
 
   //! Should not be used.
   JegaEvaluator(JEGA::Algorithms::GeneticAlgorithm& algorithm);

@@ -46,7 +46,7 @@ public:
   //! Functions that interface with Dakota's Iterator (Optimizer)
   //! Getters
   void GetNearestNeighbors(const Dakota::RealVector& variables,
-                           Dakota::IntVector& into, size_t num_neighbors,
+                           Dakota::RealVector& into, size_t num_neighbors,
                            bool force=false);
   bool GetEvaluationDecision(const Dakota::RealVector& variables);
 

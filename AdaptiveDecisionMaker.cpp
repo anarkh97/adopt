@@ -43,7 +43,7 @@ AdaptiveDecisionMaker::AdaptiveDecisionMaker()
 //------------------------------------------------------------------------------
 
 void AdaptiveDecisionMaker::GetNearestNeighbors(const RealVector &cont_vars, 
-                                                IntVector &into, 
+                                                RealVector &into, 
                                                 size_t num_neighbors,
                                                 bool force)
 {
@@ -88,7 +88,7 @@ void AdaptiveDecisionMaker::GetNearestNeighbors(const RealVector &cont_vars,
 
   sort(dist2targ.begin(), dist2targ.end());
 
-  // fill up first "num_neighbors" into IntVector
+  // fill up first "num_neighbors" into RealVector
   for(int i=0; i<num_neighbors; ++i) {
     into[i] = dist2targ[i].second;
   }
