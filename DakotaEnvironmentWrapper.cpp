@@ -19,7 +19,7 @@ DakotaEnvironmentWrapper(ProgramOptions options,
   adaptive_optimization(false)
 {
   
-  if(!check_bcast_construct) {
+  if(check_bcast_construct) {
 //    done_modifying_db();
     Cerr << "ADAPTIVE SOGA: Problem database has already been "
          << "broadcasted. Delay check and broadcast operations."
@@ -52,7 +52,7 @@ DakotaEnvironmentWrapper(MPI_Comm dakota_comm,
   adaptive_optimization(false)
 {
 
-  if(!check_bcast_construct) {
+  if(check_bcast_construct) {
 //    done_modifying_db();
     Cerr << "ADAPTIVE SOGA: Problem database has already been "
          << "broadcasted. Delay check and broadcast operations."

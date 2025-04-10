@@ -225,29 +225,19 @@ JegaEvaluator::SetStateVariables(const RealVector& cont_vars,
     into_disc_string.resize(extents[num_idsv]);
   }
   
+  //TODO: Simplify this code to just two statements.
   // Set inactive discrete string set variable -> Evaluation Type
   // Set inactive discrete integer variable -> Neighbor evaluation IDs.  
   if(!error_flag) {
-
     decision_maker.GetNearestNeighbors(cont_vars, into_disc_cont, num_icv);
-    bool eval_decision = 
-      decision_maker.GetEvaluationDecision(cont_vars);
-
-    // Pass evaluation decision to the analysis driver 
-    // through discrete string set
-    into_disc_string[switch_label_idx] = (eval_decision) ? "TRUE" : "APPROX";
-
+    decision_maker.GetEvaluationType(cont_vars, into_disc_string[switch_label_idx]);
   }
   else {
     // Function was called for error_model
-
     decision_maker.GetNearestNeighbors(cont_vars,
       into_disc_cont, num_icv, true /*force-find*/);
-
-    // Pass Error flag to the analysis driver 
-    // through discrete string set
-    into_disc_string[switch_label_idx] = "ERROR";
-
+    decision_maker.GetEvaluationType(cont_vars, 
+      into_disc_string[switch_label_idx], true /* error-sim */);
   }
   
 }
@@ -293,16 +283,18 @@ JegaEvaluator::RecordResponses(const RealVector &from, Design &into) const
 void
 JegaEvaluator::RecordEvaluationInDecisionMaker(const int id, 
                                                const RealVector &cont_vars,
-                                               const StringMultiArray &disc_strings)
+                                               const StringMultiArray &state_string_vars)
 {
 
   EDDY_FUNC_DEBUGSCOPE
 
-  // Identify the decision for current evaluation ID 
-  bool eval_decision = (disc_strings[switch_label_idx] == "TRUE");
+  JEGALOG_II(GetLogger(), ldebug(), this,
+    text_entry(ldebug(), "Evaluation ID " + std::to_string(id) + 
+      ": " + state_string_vars[switch_label_idx]))
 
   // Update the decision maker w/ evaluation id and variables.
-  decision_maker.RecordEvaluationDecision(id, cont_vars, eval_decision);
+  decision_maker.RecordEvaluationDecision(id, cont_vars, 
+    state_string_vars[switch_label_idx]);
 
 }
 
@@ -458,8 +450,8 @@ JegaEvaluator::Evaluate(DesignGroup &group)
       // has mapped parameters with responses, i.e., once
       // evaluation id has been updated.
       int eval_id = sim_model.evaluation_id();
-      RecordEvaluationInDecisionMaker(eval_id, 
-        continuous_variables, state_string_vars);
+      RecordEvaluationInDecisionMaker(eval_id, continuous_variables, 
+        state_string_vars);
     }
     else {
       // The following method call will use the default
@@ -639,6 +631,7 @@ JegaEvaluator::Evaluate(DesignGroup &group)
           r_cit->second.metadata();
         const StringArray& mtd_labels = 
           r_cit->second.shared_data().metadata_labels();
+
         RecordErrorInDecisionMaker(tr_it->first, mtd_vals, mtd_labels, 
                                    tr_it->second);
 

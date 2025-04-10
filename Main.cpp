@@ -37,7 +37,7 @@ int main(int argc, char* argv[])
   Dakota::ProgramOptions opts(argc, argv, 0);
 
   //! Create the Library environment which sets the Data containers
-  DakotaEnvironmentWrapper env(opts);
+  DakotaEnvironmentWrapper env(opts, false);
 
   //! Perform whatever study was requested.
   env.execute();

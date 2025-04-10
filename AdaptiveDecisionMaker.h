@@ -1,8 +1,6 @@
 #ifndef _ADAPTIVE_DECISION_MAKER_H_
 #define _ADAPTIVE_DECISION_MAKER_H_
 
-#include<array>
-
 // Dakota includes
 #include<dakota_global_defs.hpp>
 #include<dakota_data_types.hpp>
@@ -18,7 +16,7 @@
 class AdaptiveDecisionMaker {
 
   //! flag to switch on the GP model.
-  bool readyToPredict;
+  bool ready_to_predict;
 
   //! Database containers
   Dakota::IntRealVectorMap true_evals; // internal var.
@@ -48,7 +46,9 @@ public:
   void GetNearestNeighbors(const Dakota::RealVector& variables,
                            Dakota::RealVector& into, size_t num_neighbors,
                            bool force=false);
-  bool GetEvaluationDecision(const Dakota::RealVector& variables);
+  void GetEvaluationType(const Dakota::RealVector& variables,
+                         Dakota::String& into,
+                         const bool error_sim=false);
 
   //! Update functions
   void RecordEvaluationError(const int id, 
@@ -56,12 +56,15 @@ public:
                              const double& error);
   void RecordEvaluationDecision(const int id, 
                                 const Dakota::RealVector& variables,
-                                const bool eval_type);
+                                const Dakota::String& eval_type);
 
   //! Functions related to training and model assessment
   void Train();
 
 private:
+
+  void GetEvaluationDecision(const Dakota::RealVector& variables,
+                             Dakota::String& into);
 
   //! Helper functions to interface with dakota::surrogates
   void LoadGaussianProcesssOptions();
