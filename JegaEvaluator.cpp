@@ -204,42 +204,33 @@ const
 
 void
 JegaEvaluator::SetStateVariables(const RealVector& cont_vars, 
-                                 RealVector &into_disc_cont,
+                                 IntVector &into_disc_int,
                                  StringMultiArray &into_disc_string,
                                  const bool error_flag)
 {
   EDDY_FUNC_DEBUGSCOPE
 
   size_t num_cv   = ModelUtils::cv(sim_model);
-  size_t num_icv  = ModelUtils::idiv(sim_model);
+  size_t num_idiv = ModelUtils::idiv(sim_model);
   size_t num_idsv = ModelUtils::idsv(sim_model);
 
   EDDY_ASSERT(cont_vars.length() == num_cv);
 
   // allocate memory for arrays handled by this function.
-  if(into_disc_cont.length() != num_icv) 
-    into_disc_cont.size(num_icv);
+  if(into_disc_int.length() != num_idiv) 
+    into_disc_int.size(num_idiv);
 
   if(into_disc_string.num_elements() != num_idsv) {
     StringMultiArray::extent_gen extents;
     into_disc_string.resize(extents[num_idsv]);
   }
   
-  //TODO: Simplify this code to just two statements.
   // Set inactive discrete string set variable -> Evaluation Type
   // Set inactive discrete integer variable -> Neighbor evaluation IDs.  
-  if(!error_flag) {
-    decision_maker.GetNearestNeighbors(cont_vars, into_disc_cont, num_icv);
-    decision_maker.GetEvaluationType(cont_vars, into_disc_string[switch_label_idx]);
-  }
-  else {
-    // Function was called for error_model
-    decision_maker.GetNearestNeighbors(cont_vars,
-      into_disc_cont, num_icv, true /*force-find*/);
-    decision_maker.GetEvaluationType(cont_vars, 
-      into_disc_string[switch_label_idx], true /* error-sim */);
-  }
-  
+  decision_maker.GetNearestNeighbors(cont_vars,
+    into_disc_int, num_idiv, error_flag /*force-find*/);
+  decision_maker.GetEvaluationType(cont_vars, 
+    into_disc_string[switch_label_idx], error_flag /*error-sim*/);
 }
 
 //-----------------------------------------------------------------------------
@@ -358,7 +349,7 @@ JegaEvaluator::Evaluate(DesignGroup &group)
 */
 
   // arrays/vectors for adaptive decision model
-  RealVector       state_int_vars;
+  IntVector        state_int_vars;
   StringMultiArray state_string_vars; // "ERROR", "APPROX", "TRUE"
 
   // prepare to iterate over the group
@@ -433,7 +424,7 @@ JegaEvaluator::Evaluate(DesignGroup &group)
     // Pass decision to analysis driver.
     //=========================================================================
     SetStateVariables(continuous_variables, state_int_vars, state_string_vars);
-    ModelUtils::inactive_continuous_variables(sim_model, state_int_vars);
+    ModelUtils::inactive_discrete_int_variables(sim_model, state_int_vars);
     const size_t idsv_len = state_string_vars.num_elements();
     StringMultiArrayConstView idsv_view = state_string_vars[
       boost::indices[idx_range(0,idsv_len)]];
@@ -553,6 +544,10 @@ JegaEvaluator::Evaluate(DesignGroup &group)
 
     for(; tr_it!=tr_e; ++tr_it) {
 
+      JEGALOG_II(GetLogger(), ldebug(), this,
+        text_entry(ldebug(), "Error evaluation for ID " +
+        std::to_string(tr_it->first)))
+
       // Note: We assume that the designs have already been evaluated. Furthermore, 
       // we do not check whether the function evaluation limit has been exceeded, 
       // since error evaluations are considered auxiliary and should not contribute
@@ -580,7 +575,7 @@ JegaEvaluator::Evaluate(DesignGroup &group)
       // Pass error flag to analysis driver.
       //========================================================================
       SetStateVariables(tr_it->second, state_int_vars, state_string_vars, true); 
-      ModelUtils::inactive_continuous_variables(error_model, state_int_vars);
+      ModelUtils::inactive_discrete_int_variables(error_model, state_int_vars);
       const size_t idsv_len = state_string_vars.num_elements();
       StringMultiArrayConstView idsv_view = state_string_vars[
         boost::indices[idx_range(0,idsv_len)]];

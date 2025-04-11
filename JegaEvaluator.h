@@ -93,7 +93,7 @@ protected:
                          Dakota::RealVector& into_cont) const;
 
   void SetStateVariables(const Dakota::RealVector& cont_vars,
-                         Dakota::RealVector& into_disc_cont,
+                         Dakota::IntVector& into_disc_int,
 			                   Dakota::StringMultiArray& into_disc_string,
 			                   const bool error_flag=false);
 

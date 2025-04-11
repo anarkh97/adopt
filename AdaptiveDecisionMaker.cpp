@@ -43,7 +43,7 @@ AdaptiveDecisionMaker::AdaptiveDecisionMaker()
 //------------------------------------------------------------------------------
 
 void AdaptiveDecisionMaker::GetNearestNeighbors(const RealVector &cont_vars, 
-                                                RealVector &into, 
+                                                IntVector &into, 
                                                 size_t num_neighbors,
                                                 bool force)
 {

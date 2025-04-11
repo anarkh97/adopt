@@ -3,6 +3,7 @@
 #include<ForkApplicInterfaceWrapper.h>
 
 #include<DakotaModel.hpp>
+#include<SimulationModel.hpp>
 #include<DakotaInterface.hpp>
 
 using namespace std;
@@ -113,35 +114,73 @@ void DakotaEnvironmentWrapper::SetupAdaptiveOptimizationVariables()
       //! Check for ADAPTIVE OPTIMIZATION
       const StringArray &state_string_labels = 
         problem_db.get_sa("variables.discrete_state_set_string.labels");
+      const StringArray &metadata_labels = 
+        problem_db.get_sa("responses.metadata_labels");
 
+      bool found_switch_label = false;
+      bool found_mse_label = false;
+
+      //! Find the SWITCH discrete string set state variable
       for(const auto &label : state_string_labels) {
         if(label == "SWITCH") {
-          adaptive_optimization = true;
+          found_switch_label = true;
           break;
         }
       }
 
+      //! Find the MSE metadata response
+      for(const auto &label : metadata_labels) {
+        if(label == "MSE") {
+          found_mse_label = true;
+          break;
+        }
+      }
+
+      //! Switch to adaptive optimization if both labels are found
+      adaptive_optimization = (found_switch_label and found_mse_label);
+
       if(adaptive_optimization) {
 
-        //! Change continuous STATE variable labels for SOFICS
-        size_t num_continuous_state = problem_db.get_sizet(
-          "variables.continuous_state");
+        //! Change discrete STATE range variable labels for SOFICS
+        size_t num_interp_points = problem_db.get_sizet(
+          "variables.discrete_state_range");
+        size_t max_func_evals = problem_db.get_sizet(
+          "method.max_function_evaluations");
 
-        if(num_continuous_state <= 0) {
+        if(num_interp_points <= 0) {
           Cerr << "ADAPTIVE SOGA: Number of interpolation points "
                << "not specified. These need to be under continuous "
                << "state variables for adaptive optimization.\n";
           abort_handler(METHOD_ERROR);
         }
 
-        StringArray updated_labels(num_continuous_state);
+        IntVector initial_state(num_interp_points);
+        IntVector lower_bounds(num_interp_points);
+        IntVector upper_bounds(num_interp_points);
+        StringArray updated_labels(num_interp_points);
+        BitArray updated_catgry(num_interp_points);
 
         //! These descriptors are recognized by SOFICS
-        for(size_t i=0; i<num_continuous_state; ++i)
+        for(size_t i=0; i<num_interp_points; ++i) {
           updated_labels[i] = "NEIGHBOR_" + std::to_string(i+1);
+          updated_catgry[i] = true;
+
+          initial_state[i] = -1;
+          lower_bounds[i]  = -1;
+          upper_bounds[i]  = max_func_evals;
+        }
         
-        //! Set new labels
-        problem_db.set("variables.continuous_state.labels", updated_labels);
+        //! Update the discrete STATE range variables
+        problem_db.set("variables.discrete_state_range.labels", 
+          updated_labels);
+        problem_db.set("variables.discrete_state_range.categorical", 
+          updated_catgry);
+        problem_db.set("variables.discrete_state_range.initial_state",
+          initial_state);
+        problem_db.set("variables.discrete_state_range.lower_bounds",
+          lower_bounds);
+        problem_db.set("variables.discrete_state_range.upper_bounds",
+          upper_bounds);
 
       }
 
@@ -179,21 +218,38 @@ void DakotaEnvironmentWrapper::SetupAdaptiveOptimizer()
   if(adaptive_optimization) {
   
     //! Make sure that STATE variables are set to inactive
-    Variables &top_vars = top_model->current_variables();
-    top_vars.inactive_view(MIXED_STATE);
+    top_model->inactive_view(MIXED_STATE);
 
     //! Reference for reseting communicator
     ParLevLIter w_pl_iter = parallel_lib.w_parallel_level_iterator();
   
     //! Create a new Dakota Model for error evaluations.
-    shared_ptr<Model> err_model = ModelUtils::get_model(problem_db);
+    shared_ptr<Model> err_model = make_shared<SimulationModel>(problem_db);
+    err_model->inactive_view(MIXED_STATE);
   
     //! Reset to our own interface. This is done to distinguish
     //! working directories of true models and error models.
     Interface &err_model_interface = err_model->derived_interface();   
     err_model_interface.assign_rep(
       std::make_shared<ForkApplicInterfaceWrapper>(problem_db));
-  
+
+/*
+    //! debug
+    StringMultiArray string_var(boost::extents[1]);
+    string_var[0] = "ERROR";
+    const size_t idsv_len = string_var.num_elements();
+    StringMultiArrayConstView idsv_view = string_var[
+      boost::indices[idx_range(0,idsv_len)]];
+    ModelUtils::inactive_discrete_string_variables(*err_model, idsv_view);
+
+    StringMultiArrayConstView res = 
+      ModelUtils::inactive_discrete_string_variables(*err_model);
+
+    Cout << res[0] << "\n";
+
+    abort_handler(OTHER_ERROR);
+*/
+
     //! Assign our optimizer.
     topLevelIterator.assign_rep(
       make_shared<AdaptiveJegaOptimizer>(problem_db, top_model, err_model));
