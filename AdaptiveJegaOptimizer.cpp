@@ -754,12 +754,20 @@ AdaptiveJegaOptimizer::GetBestSOSolutions(const DesignOFSortSet &from,
   // get number of objective functions
   const eddy::utilities::uint64_t nof = target.GetNOF();
 
+  EDDY_ASSERT(nof == 1)
+
   // get total number of constraints (nonlinear and linear)
   const eddy::utilities::uint64_t noc = target.GetNCN();
 
   // in order to order the points, need the weights; get them from
   // the GA to ensure solver/final results consistency
-  JEGA::DoubleVector weights;
+
+
+  //AN: Weights are manually fixed here.
+  //    Was getting a segmentation fault here. Don't know why.
+
+  JEGA::DoubleVector weights(nof, 1.0);
+/*  
   try {
     const JEGA::Algorithms::SOGA& ga = 
       dynamic_cast<const JEGA::Algorithms::SOGA&>(ga);
@@ -769,6 +777,7 @@ AdaptiveJegaOptimizer::GetBestSOSolutions(const DesignOFSortSet &from,
          << bc_except.what() << std::endl;
     abort_handler(-1);
   }
+*/
 
   // iterate the designs and sort first by constraint violation,
   // then objective function

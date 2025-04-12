@@ -238,12 +238,6 @@ void DakotaEnvironmentWrapper::SetupAdaptiveOptimizer()
     //! Reference for reseting communicator
     ParLevLIter w_pl_iter = parallel_lib.w_parallel_level_iterator();
   
-/*
-    //! Create a new Dakota Model for error evaluations.
-    shared_ptr<Model> err_model = make_shared<SimulationModel>(problem_db);
-    err_model->inactive_view(MIXED_STATE);
-*/
-
     //! For restoration
     size_t model_index = problem_db.get_db_model_node();
     problem_db.set_db_model_nodes("ERROR_MODEL");

@@ -18,8 +18,8 @@ ForkApplicInterfaceWrapper::ForkApplicInterfaceWrapper(
                               const Dakota::ProblemDescDB &problem_db)
                           : Dakota::ForkApplicInterface(problem_db)
 {
-  // concatenate _error to work directory
-  workDirName = workDirName + "_error";
+  // error simulations are stored in a separate sub-directory
+  workDirName = "error_simulations/" + workDirName;
 }
 
 //-----------------------------------------------------------------------------

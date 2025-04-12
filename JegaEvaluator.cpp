@@ -279,10 +279,6 @@ JegaEvaluator::RecordEvaluationInDecisionMaker(const int id,
 
   EDDY_FUNC_DEBUGSCOPE
 
-  JEGALOG_II(GetLogger(), ldebug(), this,
-    text_entry(ldebug(), "Evaluation ID " + std::to_string(id) + 
-      ": " + state_string_vars[switch_label_idx]))
-
   // Update the decision maker w/ evaluation id and variables.
   decision_maker.RecordEvaluationDecision(id, cont_vars, 
     state_string_vars[switch_label_idx]);
@@ -543,10 +539,6 @@ JegaEvaluator::Evaluate(DesignGroup &group)
                  + std::to_string(decision_maker.GetTrueDatabaseSize())))
 
     for(; tr_it!=tr_e; ++tr_it) {
-
-      JEGALOG_II(GetLogger(), ldebug(), this,
-        text_entry(ldebug(), "Error evaluation for ID " +
-        std::to_string(tr_it->first)))
 
       // Note: We assume that the designs have already been evaluated. Furthermore, 
       // we do not check whether the function evaluation limit has been exceeded, 

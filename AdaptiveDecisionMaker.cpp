@@ -182,9 +182,6 @@ AdaptiveDecisionMaker::RecordEvaluationDecision(int eval_id,
                                                 const String &eval_type)
 {
 
-  Cout << "Evaluation " << eval_id << " with evaluation type "
-       << eval_type << "\n";
-
   if(eval_type == "TRUE") {
     // First check if evaluation id has already been mapped or not.
     IntRealVectorMap::iterator it = true_evals.find(eval_id);
