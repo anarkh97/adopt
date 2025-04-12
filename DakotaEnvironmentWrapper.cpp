@@ -191,6 +191,12 @@ void DakotaEnvironmentWrapper::SetupAdaptiveOptimizationVariables()
 
       }
 
+      //! Add a error model --- initialized later
+      DataModel data_model;
+      data_model.data_rep()->idModel = "ERROR_MODEL";
+      data_model.data_rep()->modelType = "simulation";
+      problem_db.insert_node(data_model);
+
     }
 
     //! Reset pointers back to original
@@ -216,7 +222,7 @@ void DakotaEnvironmentWrapper::SetupAdaptiveOptimizer()
   //! Get problem description database and iterated model 
   //! attached to the top method pointer.
   ProblemDescDB &problem_db = problem_description_db();
-  shared_ptr<Model> top_model = topLevelIterator.iterated_model();
+  shared_ptr<Model> top_model = topLevelIterator->iterated_model();
 
   //---------------------------------------------------------------------------
   // Setup top method iterator
@@ -232,18 +238,29 @@ void DakotaEnvironmentWrapper::SetupAdaptiveOptimizer()
     //! Reference for reseting communicator
     ParLevLIter w_pl_iter = parallel_lib.w_parallel_level_iterator();
   
+/*
     //! Create a new Dakota Model for error evaluations.
     shared_ptr<Model> err_model = make_shared<SimulationModel>(problem_db);
-    //err_model->inactive_view(MIXED_STATE);
-    ModelUtils::active_variables(*err_model, top_model->current_variables());
-  
+    err_model->inactive_view(MIXED_STATE);
+*/
+
+    //! For restoration
+    size_t model_index = problem_db.get_db_model_node();
+    problem_db.set_db_model_nodes("ERROR_MODEL");
+
+    //! Create a new model
+    std::shared_ptr<Model> err_model = problem_db.get_model();
+    err_model->inactive_view(MIXED_STATE);
+
     //! Reset to our own interface. This is done to distinguish
     //! working directories of true models and error models.
-    Interface &err_model_interface = err_model->derived_interface();   
-    err_model_interface.assign_rep(
+    err_model->derived_interface(
       std::make_shared<ForkApplicInterfaceWrapper>(problem_db));
 
     debug_err_model = err_model;
+
+    //! Reset model pointer in problem db
+    problem_db.set_db_model_nodes(model_index);
 
 /*
     //! debug
@@ -263,11 +280,11 @@ void DakotaEnvironmentWrapper::SetupAdaptiveOptimizer()
 */
 
     //! Assign our optimizer.
-    topLevelIterator.assign_rep(
-      make_shared<AdaptiveJegaOptimizer>(problem_db, top_model, err_model));
+    topLevelIterator.reset(
+       new AdaptiveJegaOptimizer(problem_db, top_model, err_model));
 
     //! Reset communicator
-    topLevelIterator.init_communicators(w_pl_iter);
+    topLevelIterator->init_communicators(w_pl_iter);
   
   }
 
