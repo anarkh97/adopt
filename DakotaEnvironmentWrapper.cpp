@@ -161,8 +161,15 @@ void DakotaEnvironmentWrapper::SetupAdaptiveOptimizationVariables()
         BitArray updated_catgry(num_interp_points);
 
         //! These descriptors are recognized by SOFICS
-        for(size_t i=0; i<num_interp_points; ++i) {
-          updated_labels[i] = "NEIGHBOR_" + std::to_string(i+1);
+        
+        updated_labels[0] = "TARGET";
+        updated_catgry[0] = true;
+        initial_state[0]  = -1;
+        lower_bounds[0]   = -1;
+        upper_bounds[0]   = max_func_evals;
+
+        for(size_t i=1; i<num_interp_points; ++i) {
+          updated_labels[i] = "NEIGHBOR_" + std::to_string(i);
           updated_catgry[i] = true;
 
           initial_state[i] = -1;
@@ -215,6 +222,8 @@ void DakotaEnvironmentWrapper::SetupAdaptiveOptimizer()
   // Setup top method iterator
   //---------------------------------------------------------------------------
 
+  shared_ptr<Model> debug_err_model;
+
   if(adaptive_optimization) {
   
     //! Make sure that STATE variables are set to inactive
@@ -225,13 +234,16 @@ void DakotaEnvironmentWrapper::SetupAdaptiveOptimizer()
   
     //! Create a new Dakota Model for error evaluations.
     shared_ptr<Model> err_model = make_shared<SimulationModel>(problem_db);
-    err_model->inactive_view(MIXED_STATE);
+    //err_model->inactive_view(MIXED_STATE);
+    ModelUtils::active_variables(*err_model, top_model->current_variables());
   
     //! Reset to our own interface. This is done to distinguish
     //! working directories of true models and error models.
     Interface &err_model_interface = err_model->derived_interface();   
     err_model_interface.assign_rep(
       std::make_shared<ForkApplicInterfaceWrapper>(problem_db));
+
+    debug_err_model = err_model;
 
 /*
     //! debug
@@ -259,8 +271,36 @@ void DakotaEnvironmentWrapper::SetupAdaptiveOptimizer()
   
   }
 
-  //abort_handler(OTHER_ERROR);
+/*
+  //! debug
+  RealVector cont_vars(3);
+  IntVector int_vars(1);
+  StringMultiArray string_var(boost::extents[1]);
 
+  cont_vars[0] = cont_vars[1] = cont_vars[2] = 1.0;
+  int_vars[0] = -1;
+  string_var[0] = "TRUE";
+
+  ModelUtils::continuous_variables(*top_model, cont_vars);
+  ModelUtils::inactive_discrete_int_variables(*top_model, int_vars);
+  StringMultiArrayConstView idsv_view = string_var[
+    boost::indices[idx_range(0,1)]];
+  ModelUtils::inactive_discrete_string_variables(*top_model, idsv_view);
+
+  top_model->evaluate();
+
+  string_var[0] = "ERROR";
+  int_vars[0] = 1;
+  ModelUtils::continuous_variables(*debug_err_model, cont_vars);
+  ModelUtils::inactive_discrete_int_variables(*debug_err_model, int_vars);
+  StringMultiArrayConstView idsv_view2 = string_var[
+    boost::indices[idx_range(0,1)]];
+  ModelUtils::inactive_discrete_string_variables(*debug_err_model, idsv_view2);
+
+  debug_err_model->evaluate();
+
+  abort_handler(OTHER_ERROR);
+*/
 }
 
 //-----------------------------------------------------------------------------

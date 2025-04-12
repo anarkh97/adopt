@@ -45,7 +45,7 @@ public:
   //! Getters
   void GetNearestNeighbors(const Dakota::RealVector& variables,
                            Dakota::IntVector& into,
-                           size_t num_neighbors,
+                           size_t num_int_points,
                            bool force=false);
   void GetEvaluationType(const Dakota::RealVector& variables,
                          Dakota::String& into,

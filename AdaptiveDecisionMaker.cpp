@@ -44,12 +44,15 @@ AdaptiveDecisionMaker::AdaptiveDecisionMaker()
 
 void AdaptiveDecisionMaker::GetNearestNeighbors(const RealVector &cont_vars, 
                                                 IntVector &into, 
-                                                size_t num_neighbors,
+                                                size_t num_int_points,
                                                 bool force)
 {
 
-  if(into.length() != num_neighbors) 
-    into.size(num_neighbors);
+  if(into.length() != num_int_points) 
+    into.size(num_int_points);
+
+  //! One point is reserved for target evaluation id.
+  int num_interp_points = num_int_points-1;
 
   // AN: Throw an error if force find is true but true-db is empty.
   // This distinction is made so that when decision maker is called
@@ -63,15 +66,15 @@ void AdaptiveDecisionMaker::GetNearestNeighbors(const RealVector &cont_vars,
 
   // Send garbage values when true-db is empty.
   if(true_evals.empty()) {
-    for(int i=0; i<num_neighbors; ++i) into[i] = -1;
+    for(int i=0; i<num_int_points; ++i) into[i] = -1;
     return;
   }
 
-  if(true_evals.size() < num_neighbors) {
+  if(true_evals.size() < num_interp_points) {
     Cerr << "Adaptive SOGA Error: Number of true evaluations stored "
          << "(" << true_evals.size() << ") "
          << "is less than number of neighbors requested "
-         << "(" << num_neighbors << ").\n";
+         << "(" << num_interp_points << ").\n";
     abort_handler(METHOD_ERROR);
   }
 
@@ -83,14 +86,16 @@ void AdaptiveDecisionMaker::GetNearestNeighbors(const RealVector &cont_vars,
   const IntRealVectorMap::const_iterator tr_e = true_evals.end();
   for(; tr_it!=tr_e; ++tr_it) {
     double d = EuclideanDistance(tr_it->second, cont_vars);
-    if(d == 0) continue; // skip the point itself.
+    //if(d == 0) continue; // skip the point itself.
     dist2targ.push_back({d, tr_it->first});
   }
 
   sort(dist2targ.begin(), dist2targ.end());
 
-  // fill up first "num_neighbors" into RealVector
-  for(int i=0; i<num_neighbors; ++i) {
+  // fill up first "num_int_points" into RealVector
+  // Note: first point will be the current point
+  // itself (i.e., target)
+  for(int i=0; i<num_int_points; ++i) {
     into[i] = dist2targ[i].second;
   }
 
