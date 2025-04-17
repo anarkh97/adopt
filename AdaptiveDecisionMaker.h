@@ -4,6 +4,7 @@
 // Dakota includes
 #include<dakota_global_defs.hpp>
 #include<dakota_data_types.hpp>
+#include<ProblemDescDB.hpp>
 #include<SurrogatesGaussianProcess.hpp>
 
 // Eigen includes.
@@ -15,8 +16,14 @@
 
 class AdaptiveDecisionMaker {
 
+  //! Verbosity
+  int verbose;
+
   //! flag to switch on the GP model.
   bool ready_to_predict;
+
+  //! Problem description
+  const Dakota::ProblemDescDB& problem_db;
 
   //! Database containers
   Dakota::IntRealVectorMap true_evals; // internal var.
@@ -30,7 +37,7 @@ class AdaptiveDecisionMaker {
 
 public:
 
-  AdaptiveDecisionMaker();
+  AdaptiveDecisionMaker(const Dakota::ProblemDescDB& problem_db);
   ~AdaptiveDecisionMaker() { };
 
   //! Iterating functions
@@ -64,6 +71,8 @@ public:
 
 private:
 
+  void ReadOptionsFile(const Dakota::String filename);
+
   void GetEvaluationDecision(const Dakota::RealVector& variables,
                              Dakota::String& into);
 
@@ -72,7 +81,7 @@ private:
   //! (re-)builds the GaussianProcess model
   double BuildGaussianProcessModel(const Eigen::MatrixXd& samples,
                                    const Eigen::VectorXd& values,
-                                   const double split_ratio=0.0,
+                                   double split_ratio=0.0,
                                    /* default value of dakota::surrogates*/
                                    const size_t seed=42); 
   void CrossValidateGausssianModel() const;

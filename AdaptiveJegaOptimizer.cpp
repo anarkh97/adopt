@@ -135,8 +135,7 @@ AdaptiveJegaOptimizer::AdaptiveJegaOptimizer(ProblemDescDB &prob_db,
   // Create the adaptive decision maker object
   // Chose to instantiate here so that we can pass
   // user I/O objects here.
-  decision_maker = 
-    make_shared<AdaptiveDecisionMaker>();
+  decision_maker = make_shared<AdaptiveDecisionMaker>(prob_db);
 
   // iteratedModel is the sim_model set internally 
   // by DakotaOptimizer

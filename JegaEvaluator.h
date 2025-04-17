@@ -109,8 +109,6 @@ protected:
                                   const Dakota::StringArray& labels,
                                   const Dakota::RealVector& cont_vars);
 
-  void TrainDecisionMaker();
-
   std::size_t GetNumberNonLinearConstraints() const;
   std::size_t GetNumberLinearConstraints() const;
 

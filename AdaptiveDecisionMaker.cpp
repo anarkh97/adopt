@@ -33,11 +33,57 @@ double EuclideanDistance(const RealVector &v1, const RealVector &v2)
 
 //------------------------------------------------------------------------------
 
-AdaptiveDecisionMaker::AdaptiveDecisionMaker()
-                     : true_evals(), approx_evals(), error_vals(),
-                       ready_to_predict(false)
+AdaptiveDecisionMaker::AdaptiveDecisionMaker(const ProblemDescDB &problem_db_)
+                     : problem_db(problem_db_), true_evals(), approx_evals(), 
+                       error_vals(), ready_to_predict(false)
 {
-  // empty ctor
+
+  short dakota_level = problem_db.get_short("method.output");
+  //! AN: Note these output levels correspond to dakota::surrogates.
+  //!     We follow the same convention.
+  switch(dakota_level) {
+    case SILENT_OUTPUT:
+    case QUIET_OUTPUT:
+      verbose = 0; /* no output */
+      break;
+    case NORMAL_OUTPUT:
+      verbose = 1; /* normal output */
+      break;
+    case VERBOSE_OUTPUT:
+    case DEBUG_OUTPUT:
+      verbose = 2; /* maximum output */
+      break;
+    default:
+      verbose = 0;
+      break;
+  }
+
+  String options_file = problem_db.get_string("method.advanced_options_file");
+
+  //! Read Gaussian Process options from user specified file.
+  ReadOptionsFile(options_file);
+
+  //! NOTE: since we use the default GP constructor, the default
+  //! GP options have already been setup. Here we override a few
+  //! GP options based on our requirements.
+  LoadGaussianProcesssOptions();
+
+}
+
+//------------------------------------------------------------------------------
+
+void
+AdaptiveDecisionMaker::ReadOptionsFile(const String filename)
+{
+
+  if(filename.empty() and verbose > 0) {
+    Cout << "Adaptive SOGA Warning: No options file for " 
+         << "the decision maker was provided. Default values "
+         << "will be used.\n";
+  }
+
+  //! Start parsing options for the decision maker
+
 }
 
 //------------------------------------------------------------------------------
@@ -65,18 +111,18 @@ void AdaptiveDecisionMaker::GetNearestNeighbors(const RealVector &cont_vars,
   }
 
   // Send garbage values when true-db is empty.
-  if(true_evals.empty()) {
+  if(true_evals.empty() or true_evals.size() < num_interp_points) {
     for(int i=0; i<num_int_points; ++i) into[i] = -1;
     return;
   }
 
-  if(true_evals.size() < num_interp_points) {
-    Cerr << "Adaptive SOGA Error: Number of true evaluations stored "
-         << "(" << true_evals.size() << ") "
-         << "is less than number of neighbors requested "
-         << "(" << num_interp_points << ").\n";
-    abort_handler(METHOD_ERROR);
-  }
+  //if(true_evals.size() < num_interp_points) {
+  //  Cerr << "Adaptive SOGA Error: Number of true evaluations stored "
+  //       << "(" << true_evals.size() << ") "
+  //       << "is less than number of neighbors requested "
+  //       << "(" << num_interp_points << ").\n";
+  //  abort_handler(METHOD_ERROR);
+  //}
 
   // AN: Currently doing naive search.
   // TODO: Could use KDTree.
@@ -92,7 +138,7 @@ void AdaptiveDecisionMaker::GetNearestNeighbors(const RealVector &cont_vars,
 
   sort(dist2targ.begin(), dist2targ.end());
 
-  // fill up first "num_int_points" into RealVector
+  // fill up first "num_int_points" into IntVector
   // Note: first point will be the current point
   // itself (i.e., target)
   for(int i=0; i<num_int_points; ++i) {
@@ -185,10 +231,10 @@ AdaptiveDecisionMaker::RecordEvaluationDecision(int eval_id,
   if(eval_type == "TRUE") {
     // First check if evaluation id has already been mapped or not.
     IntRealVectorMap::iterator it = true_evals.find(eval_id);
-    if(it != true_evals.end()) {
-      Cerr << "Adaptive SOGA Error: Duplicate evaluation ID " << eval_id
-           << ", previously mapped to variables: " << it->second;
-      abort_handler(METHOD_ERROR);
+    if(it != true_evals.end() and verbose > 1) {
+      Cout << "Adaptive SOGA Error: Duplicate evaluation ID " << eval_id
+           << ", previously mapped to variables: " << it->second
+           << ". Skipping ...\n";
     }
 
     true_evals[eval_id] = cont_vars;
@@ -196,10 +242,10 @@ AdaptiveDecisionMaker::RecordEvaluationDecision(int eval_id,
   else if (eval_type == "APPROX") {
     // Firt check if evaluation id has already been mapped or not.
     IntRealVectorMap::iterator it = approx_evals.find(eval_id);
-    if(it != approx_evals.end()) {
-      Cerr << "Adaptive SOGA Error: Duplicate evaluation ID " << eval_id
-           << ", previously mapped to variables: " << it->second;
-      abort_handler(METHOD_ERROR);
+    if(it != approx_evals.end() and verbose > 1) {
+      Cout << "Adaptive SOGA Error: Duplicate evaluation ID " << eval_id
+           << ", previously mapped to variables: " << it->second
+           << ". Skipping ...\n";
     }
 
     approx_evals[eval_id] = cont_vars;
@@ -221,7 +267,8 @@ AdaptiveDecisionMaker::LoadGaussianProcesssOptions()
   ParameterList options;
   gp_model.get_options(options);
 
-  options.set("verbosity", 1);
+  options.set("verbosity", verbose);
+
   // rng options.
   options.set("gp seed", 42);
   // scaling options
@@ -232,12 +279,12 @@ AdaptiveDecisionMaker::LoadGaussianProcesssOptions()
   options.set("kernel type", "squared exponential");
 
   // polynomial trend options.
-  options.sublist("Trend").sublist("estimate trend", true);
+  options.sublist("Trend").set("estimate trend", true);
 
   // nugget options.
   options.sublist("Nugget").set("estimate nugget", true);
-  options.sublist("Nugget").sublist("Bounds").set("lower bound", 0);
-  options.sublist("Nugget").sublist("Bounds").set("upper bound", 1);
+  options.sublist("Nugget").sublist("Bounds").set("lower bound", 0.0);
+  options.sublist("Nugget").sublist("Bounds").set("upper bound", 1.0);
 
   // hyperparameter optimization options.
   options.set("num restarts", 20);
@@ -308,15 +355,16 @@ AdaptiveDecisionMaker::LoadResponses(const IntRealMap &from,
 double
 AdaptiveDecisionMaker::BuildGaussianProcessModel(const MatrixXd &samples,
                                                  const VectorXd &values,
-                                                 const double split_ratio,
+                                                 double split_ratio,
                                                  const size_t seed)
 {
 
   assert(samples.rows() == values.rows());
 
-  if(split_ratio == 0)  {
-    Cerr << "Adaptive SOGA Error: Train/Test split ratio not provided.\n";
-    abort_handler(METHOD_ERROR);
+  if(split_ratio == 0 and verbose > 0)  {
+    Cout << "Adaptive SOGA Error: Train/Test split ratio not provided. "
+         << "Using default (20%).\n";
+    split_ratio = 0.2;
   }
 
   // split data set into training and testing sets.
@@ -393,11 +441,6 @@ void
 AdaptiveDecisionMaker::Train()
 {
 
-  // NOTE: since we use the default GP constructor, the default
-  // GP options have already been setup. Here we override a few
-  // GP options based on our requirements.
-  LoadGaussianProcesssOptions();
-
   // prepare to train 
   MatrixXd parameters; // continuous design variables
   VectorXd responses; // error values for the designs
@@ -407,9 +450,18 @@ AdaptiveDecisionMaker::Train()
 
   double loss = BuildGaussianProcessModel(parameters, responses);
 
+  if(verbose>1) {
+    Cout << "Adaptive SOGA: Computed loss for Gaussian Process Regression "
+         << "model is " << loss*100 << "%.\n";
+  }
+
   // switch the model on once loss is below a threshold.
-  if(loss < 1e-2) 
+  if(loss < 1e-2) { 
+    if(verbose>0)
+      Cout << "Adaptive SOGA: Gaussian Process Regression model is ready "
+           << "to predict.\n";
     ready_to_predict = true;
+  }
 
 }
 

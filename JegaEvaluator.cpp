@@ -629,19 +629,11 @@ JegaEvaluator::Evaluate(DesignGroup &group)
 
   }
 
-  TrainDecisionMaker();
+  decision_maker.Train();
 
   return ret;
 }
 
-
-//-----------------------------------------------------------------------------
-
-
-void JegaEvaluator::TrainDecisionMaker()
-{
-
-}
 
 //-----------------------------------------------------------------------------
 
