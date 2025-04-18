@@ -362,7 +362,7 @@ AdaptiveDecisionMaker::BuildGaussianProcessModel(const MatrixXd &samples,
   assert(samples.rows() == values.rows());
 
   if(split_ratio == 0 and verbose > 0)  {
-    Cout << "Adaptive SOGA Error: Train/Test split ratio not provided. "
+    Cout << "Adaptive SOGA Warning: Train/Test split ratio not provided. "
          << "Using default (20%).\n";
     split_ratio = 0.2;
   }
