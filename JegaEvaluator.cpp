@@ -289,8 +289,7 @@ JegaEvaluator::RecordEvaluationInDecisionMaker(const int id,
 
 void
 JegaEvaluator::RecordErrorInDecisionMaker(const int id, /* evaluation id from true model */
-                                          const std::vector<RespMetadataT> &vals, 
-                                          const StringArray &labels, 
+                                          const RealVector &from, 
                                           const RealVector &cont_vars)
 {
 
@@ -299,22 +298,9 @@ JegaEvaluator::RecordErrorInDecisionMaker(const int id, /* evaluation id from tr
   size_t num_cv = ModelUtils::cv(sim_model);
 
   EDDY_ASSERT(cont_vars.length() == num_cv);
-
-  size_t loc = 0;
-  bool found_label = false;
-  for(const auto &lbl : labels) {
-    if(lbl == "MSE" and !found_label) {
-      decision_maker.RecordEvaluationError(id, cont_vars, vals[loc]);
-      found_label = true;
-    }
-    ++loc;
-  }
-
-  if(!found_label) {
-    JEGALOG_II_G_F(this, text_entry(lfatal(),
-                 "Adaptive JEGA Error: Optimizer requires a "
-                 "metadata with label \"MSE\".\n"))
-  }
+  EDDY_ASSERT(from.length() == 1); // only one response expected.
+  
+  decision_maker.RecordEvaluationError(id, cont_vars, from[0]);
 
 }
 
@@ -583,13 +569,11 @@ JegaEvaluator::Evaluate(DesignGroup &group)
         error_model.evaluate();
 
         // Record the error responses from metadata
-        const std::vector<RespMetadataT>& mtd_vals =
-          error_model.current_response().metadata();
-        const StringArray& mtd_labels = 
-          error_model.current_response().shared_data().metadata_labels();
+        const RealVector &rsp_values =
+          error_model.current_response().function_values();
 
 	      // Error response should not be sent to JEGA.
-        RecordErrorInDecisionMaker(tr_it->first, mtd_vals, mtd_labels, tr_it->second);
+        RecordErrorInDecisionMaker(tr_it->first, rsp_values, tr_it->second);
       }
 
     }
@@ -619,8 +603,10 @@ JegaEvaluator::Evaluate(DesignGroup &group)
         const StringArray& mtd_labels = 
           r_cit->second.shared_data().metadata_labels();
 
-        RecordErrorInDecisionMaker(tr_it->first, mtd_vals, mtd_labels, 
-                                   tr_it->second);
+        const RealVector &rsp_values =
+          r_cit->second.function_values();
+
+        RecordErrorInDecisionMaker(tr_it->first, rsp_values, tr_it->second);
 
         //increment
         ++r_cit;

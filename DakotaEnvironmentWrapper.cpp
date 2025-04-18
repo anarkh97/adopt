@@ -1,6 +1,5 @@
 #include<DakotaEnvironmentWrapper.h>
 #include<AdaptiveJegaOptimizer.h>
-#include<ForkApplicInterfaceWrapper.h>
 
 #include<DakotaModel.hpp>
 #include<SimulationModel.hpp>
@@ -114,32 +113,29 @@ void DakotaEnvironmentWrapper::SetupAdaptiveOptimizationVariables()
       //! Check for ADAPTIVE OPTIMIZATION
       const StringArray &state_string_labels = 
         problem_db.get_sa("variables.discrete_state_set_string.labels");
-      const StringArray &metadata_labels = 
-        problem_db.get_sa("responses.metadata_labels");
 
-      bool found_switch_label = false;
-      bool found_mse_label = false;
+      adaptive_optimization = false;
 
       //! Find the SWITCH discrete string set state variable
       for(const auto &label : state_string_labels) {
         if(label == "SWITCH") {
-          found_switch_label = true;
+          adaptive_optimization = true;
           break;
         }
       }
-
-      //! Find the MSE metadata response
-      for(const auto &label : metadata_labels) {
-        if(label == "MSE") {
-          found_mse_label = true;
-          break;
-        }
-      }
-
-      //! Switch to adaptive optimization if both labels are found
-      adaptive_optimization = (found_switch_label and found_mse_label);
 
       if(adaptive_optimization) {
+
+        //---------------------------------------------------------------------
+        // Additional data containers for ERROR model.
+        //---------------------------------------------------------------------
+        DataModel     data_model;
+        DataInterface data_interf;
+        DataResponses data_respns;
+
+        //---------------------------------------------------------------------
+        // Update the True simulation model
+        //---------------------------------------------------------------------
 
         //! Change discrete STATE range variable labels for SOFICS
         size_t num_interp_points = problem_db.get_sizet(
@@ -189,13 +185,57 @@ void DakotaEnvironmentWrapper::SetupAdaptiveOptimizationVariables()
         problem_db.set("variables.discrete_state_range.upper_bounds",
           upper_bounds);
 
-      }
+        //---------------------------------------------------------------------
+        // Populate ERROR model (Dakota classes initialized later)
+        //---------------------------------------------------------------------
 
-      //! Add a error model --- initialized later
-      DataModel data_model;
-      data_model.data_rep()->idModel = "ERROR_MODEL";
-      data_model.data_rep()->modelType = "simulation";
-      problem_db.insert_node(data_model);
+        //! Create an error model
+        data_model.data_rep()->idModel = "ERROR_MODEL";
+        data_model.data_rep()->modelType = "simulation";
+        data_model.data_rep()->interfacePointer = "ERROR_FORK_INTERF";
+        data_model.data_rep()->responsesPointer = "MSE_RESPONSE";
+
+        //! Create an interface for computing MSE
+        data_interf.data_rep()->idInterface = "ERROR_FORK_INTERF";
+        data_interf.data_rep()->interfaceType = Dakota::FORK_INTERFACE;
+        data_interf.data_rep()->fileTagFlag = true;
+        data_interf.data_rep()->fileSaveFlag = true;
+        data_interf.data_rep()->useWorkdir = true;
+        data_interf.data_rep()->dirTag = true;
+        data_interf.data_rep()->dirSave = true;
+        data_interf.data_rep()->failAction = "abort";
+        data_interf.data_rep()->asynchLocalEvalConcurrency = 1;
+        data_interf.data_rep()->asynchLocalEvalScheduling = Dakota::STATIC_SCHEDULING;
+
+        //! Get info from True model
+        const String &tr_work_dir = 
+          problem_db.get_string("interface.workDir");
+        const String &tr_param_file = 
+          problem_db.get_string("interface.application.parameters_file");
+        const String &tr_result_file = 
+          problem_db.get_string("interface.application.results_file");
+        const StringArray &tr_drivers = 
+          problem_db.get_sa("interface.application.analysis_drivers");
+
+        //! Set rest of the interface values.
+        data_interf.data_rep()->workDir = "error_simulations/" + tr_work_dir;
+        data_interf.data_rep()->parametersFile = tr_param_file;
+        data_interf.data_rep()->resultsFile = tr_result_file;
+        data_interf.data_rep()->analysisDrivers = tr_drivers;
+
+        //! Create a set of responses for converying MSE to Optimizer
+        data_respns.data_rep()->idResponses = "MSE_RESPONSE";
+        data_respns.data_rep()->numResponseFunctions = 1;
+        data_respns.data_rep()->responseLabels.push_back("MSE");
+
+        //---------------------------------------------------------------------
+        // Insert ERROR model into ProblemDescDB
+        //---------------------------------------------------------------------
+        problem_db.insert_node(data_model);
+        problem_db.insert_node(data_interf);
+        problem_db.insert_node(data_respns);
+
+      }
 
     }
 
@@ -228,8 +268,6 @@ void DakotaEnvironmentWrapper::SetupAdaptiveOptimizer()
   // Setup top method iterator
   //---------------------------------------------------------------------------
 
-  shared_ptr<Model> debug_err_model;
-
   if(adaptive_optimization) {
   
     //! Make sure that STATE variables are set to inactive
@@ -246,12 +284,12 @@ void DakotaEnvironmentWrapper::SetupAdaptiveOptimizer()
     std::shared_ptr<Model> err_model = problem_db.get_model();
     err_model->inactive_view(MIXED_STATE);
 
+/*
     //! Reset to our own interface. This is done to distinguish
     //! working directories of true models and error models.
     err_model->derived_interface(
       std::make_shared<ForkApplicInterfaceWrapper>(problem_db));
-
-    debug_err_model = err_model;
+*/
 
     //! Reset model pointer in problem db
     problem_db.set_db_model_nodes(model_index);
@@ -282,36 +320,6 @@ void DakotaEnvironmentWrapper::SetupAdaptiveOptimizer()
   
   }
 
-/*
-  //! debug
-  RealVector cont_vars(3);
-  IntVector int_vars(1);
-  StringMultiArray string_var(boost::extents[1]);
-
-  cont_vars[0] = cont_vars[1] = cont_vars[2] = 1.0;
-  int_vars[0] = -1;
-  string_var[0] = "TRUE";
-
-  ModelUtils::continuous_variables(*top_model, cont_vars);
-  ModelUtils::inactive_discrete_int_variables(*top_model, int_vars);
-  StringMultiArrayConstView idsv_view = string_var[
-    boost::indices[idx_range(0,1)]];
-  ModelUtils::inactive_discrete_string_variables(*top_model, idsv_view);
-
-  top_model->evaluate();
-
-  string_var[0] = "ERROR";
-  int_vars[0] = 1;
-  ModelUtils::continuous_variables(*debug_err_model, cont_vars);
-  ModelUtils::inactive_discrete_int_variables(*debug_err_model, int_vars);
-  StringMultiArrayConstView idsv_view2 = string_var[
-    boost::indices[idx_range(0,1)]];
-  ModelUtils::inactive_discrete_string_variables(*debug_err_model, idsv_view2);
-
-  debug_err_model->evaluate();
-
-  abort_handler(OTHER_ERROR);
-*/
 }
 
 //-----------------------------------------------------------------------------

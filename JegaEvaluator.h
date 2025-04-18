@@ -105,8 +105,7 @@ protected:
                                        const Dakota::RealVector& cont_vars,
                                        const Dakota::StringMultiArray& disc_strings);
   void RecordErrorInDecisionMaker(const int id,
-                                  const std::vector<Dakota::RespMetadataT>& vals,
-                                  const Dakota::StringArray& labels,
+                                  const Dakota::RealVector& from,
                                   const Dakota::RealVector& cont_vars);
 
   std::size_t GetNumberNonLinearConstraints() const;

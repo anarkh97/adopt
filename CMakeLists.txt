@@ -61,7 +61,6 @@ endforeach()
 add_executable(adopt
 Main.cpp
 DakotaEnvironmentWrapper.cpp
-ForkApplicInterfaceWrapper.cpp
 AdaptiveJegaOptimizer.cpp
 JegaDriver.cpp
 JegaEvaluatorCreator.cpp
