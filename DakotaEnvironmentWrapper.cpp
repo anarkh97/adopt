@@ -204,8 +204,8 @@ void DakotaEnvironmentWrapper::SetupAdaptiveOptimizationVariables()
         data_interf.data_rep()->dirTag = true;
         data_interf.data_rep()->dirSave = true;
         data_interf.data_rep()->failAction = "abort";
-        data_interf.data_rep()->asynchLocalEvalConcurrency = 1;
-        data_interf.data_rep()->asynchLocalEvalScheduling = Dakota::STATIC_SCHEDULING;
+        //data_interf.data_rep()->asynchLocalEvalConcurrency = 1;
+        //data_interf.data_rep()->asynchLocalEvalScheduling = Dakota::STATIC_SCHEDULING;
 
         //! Get info from True model
         const String &tr_work_dir = 
@@ -216,12 +216,18 @@ void DakotaEnvironmentWrapper::SetupAdaptiveOptimizationVariables()
           problem_db.get_string("interface.application.results_file");
         const StringArray &tr_drivers = 
           problem_db.get_sa("interface.application.analysis_drivers");
+        int tr_eval_concurn = 
+          problem_db.get_int("interface.asynch_local_evaluation_concurrency");
+        short tr_eval_schedl =
+          problem_db.get_short("interface.local_evaluation_scheduling");
 
         //! Set rest of the interface values.
         data_interf.data_rep()->workDir = "error_simulations/" + tr_work_dir;
         data_interf.data_rep()->parametersFile = tr_param_file;
         data_interf.data_rep()->resultsFile = tr_result_file;
         data_interf.data_rep()->analysisDrivers = tr_drivers;
+        data_interf.data_rep()->asynchLocalEvalConcurrency = tr_eval_concurn;
+        data_interf.data_rep()->asynchLocalEvalScheduling = tr_eval_schedl;
 
         //! Create a set of responses for converying MSE to Optimizer
         data_respns.data_rep()->idResponses = "MSE_RESPONSE";
