@@ -63,9 +63,9 @@ string asstring(const T& val)
 
 
 AdaptiveJegaOptimizer::AdaptiveJegaOptimizer(ProblemDescDB &prob_db, 
-                                             shared_ptr<Model> sim_model, 
-                                             shared_ptr<Model> error_model)
-                     : Optimizer(prob_db, sim_model, /*propagate the true model to Dakota*/
+                                             shared_ptr<Model> sim_model,
+                                             shared_ptr<Model> err_model)
+                     : Optimizer(prob_db, sim_model,
                                  std::shared_ptr<AdaptiveJegaTraits>(
                                  new AdaptiveJegaTraits())),
                        param_db(nullptr), eval_creator(nullptr), 
@@ -140,8 +140,8 @@ AdaptiveJegaOptimizer::AdaptiveJegaOptimizer(ProblemDescDB &prob_db,
   // iteratedModel is the sim_model set internally 
   // by DakotaOptimizer
   eval_creator = 
-    make_shared<JegaEvaluatorCreator>(*iteratedModel, 
-                                      *error_model,
+    make_shared<JegaEvaluatorCreator>(*sim_model, 
+                                      *err_model,
                                       *decision_maker);
   
 }
