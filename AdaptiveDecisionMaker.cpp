@@ -456,7 +456,7 @@ AdaptiveDecisionMaker::Train()
   }
 
   // switch the model on once loss is below a threshold.
-  if(loss < 1e-2) { 
+  if(loss < 5e-2) { 
     if(verbose>0)
       Cout << "Adaptive SOGA: Gaussian Process Regression model is ready "
            << "to predict.\n";
