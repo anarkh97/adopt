@@ -22,6 +22,9 @@ class AdaptiveDecisionMaker {
   //! flag to switch on the GP model.
   bool ready_to_predict;
 
+  //! Number of times train is called.
+  int num_train_calls;
+
   //! Problem description
   const Dakota::ProblemDescDB& problem_db;
 
@@ -79,11 +82,12 @@ private:
   //! Helper functions to interface with dakota::surrogates
   void LoadGaussianProcesssOptions();
   //! (re-)builds the GaussianProcess model
-  double BuildGaussianProcessModel(const Eigen::MatrixXd& samples,
-                                   const Eigen::VectorXd& values,
-                                   double split_ratio=0.0,
-                                   /* default value of dakota::surrogates*/
-                                   const size_t seed=42); 
+  bool BuildGaussianProcessModel(const Eigen::MatrixXd& samples,
+                                 const Eigen::VectorXd& values,
+                                 double& loss,
+                                 double split_ratio=0.0,
+                                 /* default value of dakota::surrogates*/
+                                 const size_t seed=42); 
   void CrossValidateGausssianModel() const;
 
   void LoadParameters(const Dakota::IntRealVectorMap& from, 

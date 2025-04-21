@@ -35,7 +35,7 @@ double EuclideanDistance(const RealVector &v1, const RealVector &v2)
 
 AdaptiveDecisionMaker::AdaptiveDecisionMaker(const ProblemDescDB &problem_db_)
                      : problem_db(problem_db_), true_evals(), approx_evals(), 
-                       error_vals(), ready_to_predict(false)
+                       error_vals(), ready_to_predict(false), num_train_calls(0)
 {
 
   short dakota_level = problem_db.get_short("method.output");
@@ -177,22 +177,30 @@ AdaptiveDecisionMaker::GetEvaluationDecision(const RealVector &cont_vars,
   //! Set the base case
   into = "TRUE";
 
-  // Return when databse is empty.
-  if(true_evals.empty()) {
+  //! Return when databse is empty.
+  if(true_evals.empty()) 
     return;
-  }
+  
+  //! Return when GP model is not ready.
+  if(!ready_to_predict)
+    return;
 
-  if(ready_to_predict) {
-    
-    MatrixXd query(1, cont_vars.length());
-    VectorXd var_query = gp_model.variance(query);
+  //! Use GP model to predict the evaluation decision.
+  MatrixXd query(1, cont_vars.length());
+  for(int i=0; i<cont_vars.length(); ++i)
+    query(0,i) = cont_vars[i];
 
-    // predict the error when the model is certain enough
-    if(var_query(0) < 1e-2) {
-      VectorXd pred_query = gp_model.value(query);
-      into = (pred_query(0) < 1e-2) ? "APPROX" : "TRUE";
-    }
+  VectorXd query_variance   = gp_model.variance(query);
+  VectorXd query_prediction = gp_model.value(query);
 
+  if(query_variance(0) < 1e-2) 
+    into = (query_prediction(0) <= 1e-2) ? "APPROX" : "TRUE";
+
+  if(verbose>1) { 
+    //cont_vars.print(Cout) << 
+    Cout << "variables :\n" << query << "\n";
+    Cout << "variance  : "  << query_variance(0) << "\n";
+    Cout << "prediction: "  << query_prediction(0) << "\n"; 
   }
 
 }
@@ -211,8 +219,8 @@ AdaptiveDecisionMaker::RecordEvaluationError(const int eval_id,
   // in error_vals are mapped to expected continuous variables stored in 
   // true_evals.
   if(cont_vars != stored_vars) {
-    Cerr << "Adaptive SOGA Error: Trying to map error values for unknown design "
-         << "variables.\n";
+    Cerr << "Adaptive SOGA Error: Trying to map error values "
+         << "for unknown design variables.\n";
     abort_handler(METHOD_ERROR);
   }
 
@@ -231,8 +239,8 @@ AdaptiveDecisionMaker::RecordEvaluationDecision(int eval_id,
   if(eval_type == "TRUE") {
     // First check if evaluation id has already been mapped or not.
     IntRealVectorMap::iterator it = true_evals.find(eval_id);
-    if(it != true_evals.end() and verbose > 1) {
-      Cout << "Adaptive SOGA Error: Duplicate evaluation ID " << eval_id
+    if(it != true_evals.end() and verbose>1) {
+      Cout << "Adaptive SOGA Warning: Duplicate evaluation ID " << eval_id
            << ", previously mapped to variables: " << it->second
            << ". Skipping ...\n";
     }
@@ -242,8 +250,8 @@ AdaptiveDecisionMaker::RecordEvaluationDecision(int eval_id,
   else if (eval_type == "APPROX") {
     // Firt check if evaluation id has already been mapped or not.
     IntRealVectorMap::iterator it = approx_evals.find(eval_id);
-    if(it != approx_evals.end() and verbose > 1) {
-      Cout << "Adaptive SOGA Error: Duplicate evaluation ID " << eval_id
+    if(it != approx_evals.end() and verbose>1) {
+      Cout << "Adaptive SOGA Warning: Duplicate evaluation ID " << eval_id
            << ", previously mapped to variables: " << it->second
            << ". Skipping ...\n";
     }
@@ -352,16 +360,17 @@ AdaptiveDecisionMaker::LoadResponses(const IntRealMap &from,
 
 //------------------------------------------------------------------------------
 
-double
+bool
 AdaptiveDecisionMaker::BuildGaussianProcessModel(const MatrixXd &samples,
                                                  const VectorXd &values,
+                                                 double &loss,
                                                  double split_ratio,
                                                  const size_t seed)
 {
 
   assert(samples.rows() == values.rows());
 
-  if(split_ratio == 0 and verbose > 0)  {
+  if(split_ratio == 0 and verbose>0)  {
     Cout << "Adaptive SOGA Warning: Train/Test split ratio not provided. "
          << "Using default (20%).\n";
     split_ratio = 0.2;
@@ -372,6 +381,13 @@ AdaptiveDecisionMaker::BuildGaussianProcessModel(const MatrixXd &samples,
   int num_samples = samples.rows();
   int num_holdout = (int)(num_samples*split_ratio);
   int num_train   = num_samples - num_holdout;
+
+  if(num_holdout == 0) {
+    Cout << "Adaptive SOGA Warning: Insufficient data to create separate "
+         << "training and test sets. Waiting till more samples are collected.\n";
+    loss = 1e10; /* sending back a random large value. */
+    return false;
+  }
 
   MatrixXd training_samples(num_train, var_dim);
   VectorXd training_values(num_train);
@@ -417,10 +433,10 @@ AdaptiveDecisionMaker::BuildGaussianProcessModel(const MatrixXd &samples,
     gp_model.value(testing_samples);
 
   // calculate loss 
-  double loss = (prediction_values - testing_values).norm();
-  loss /= num_holdout;
+  loss = (prediction_values - testing_values).norm();
+  loss = std::sqrt(loss/num_holdout);
 
-  return std::sqrt(loss);
+  return true;
 
 }
 
@@ -441,6 +457,8 @@ void
 AdaptiveDecisionMaker::Train()
 {
 
+  ++num_train_calls;
+
   // prepare to train 
   MatrixXd parameters; // continuous design variables
   VectorXd responses; // error values for the designs
@@ -448,19 +466,39 @@ AdaptiveDecisionMaker::Train()
   LoadParameters(true_evals, parameters);
   LoadResponses(error_vals, responses);
 
-  double loss = BuildGaussianProcessModel(parameters, responses);
-
-  if(verbose>1) {
-    Cout << "Adaptive SOGA: Computed loss for Gaussian Process Regression "
-         << "model is " << loss*100 << "%.\n";
+  //! Return when the database is too small (i.e., build failed).
+  double loss = 0.0;
+  if(!BuildGaussianProcessModel(parameters, responses, loss)) {
+    ready_to_predict = false;
+    return;
   }
 
-  // switch the model on once loss is below a threshold.
+  //! Switch the GP model on once loss is below a threshold.
   if(loss < 5e-2) { 
+    ready_to_predict = true;
+
     if(verbose>0)
       Cout << "Adaptive SOGA: Gaussian Process Regression model is ready "
            << "to predict.\n";
-    ready_to_predict = true;
+  }
+
+  //! Debug output
+  if(verbose>1) {
+    Cout << "Training " << num_train_calls 
+         << " (loss = " << loss << ")" << ":\n";
+    VectorXd variance = gp_model.variance(parameters);
+    VectorXd p_responses = gp_model.value(parameters);
+
+    int num_variables = parameters.cols();
+    int num_points = parameters.rows();
+    for(int i=0; i<num_points; ++i) {
+      for(int j=0; j<num_variables; ++j)
+        Cout << parameters(i,j) << "    ";
+      Cout << responses(i) << "    "
+           << p_responses(i) << "    "
+           << variance(i) << "\n";
+    }
+    Cout << "\n";
   }
 
 }
