@@ -193,8 +193,8 @@ AdaptiveDecisionMaker::GetEvaluationDecision(const RealVector &cont_vars,
   VectorXd query_variance   = gp_model.variance(query);
   VectorXd query_prediction = gp_model.value(query);
 
-  if(std::abs(query_variance(0)) < 1e-2) 
-    into = (std::abs(query_prediction(0)) < 1e-2) ? "APPROX" : "TRUE";
+  if(3*query_variance(0) < 1e-2) 
+    into = (query_prediction(0) < 1e-2) ? "APPROX" : "TRUE";
 
   if(verbose>1) { 
     //cont_vars.print(Cout) << 

@@ -205,10 +205,19 @@ JegaEvaluator::SetStateVariables(const RealVector& cont_vars,
   
   // Set inactive discrete string set variable -> Evaluation Type
   // Set inactive discrete integer variable -> Neighbor evaluation IDs.  
-  decision_maker.GetNearestNeighbors(cont_vars,
-    into_disc_int, num_idiv, error_flag /*force-find*/);
   decision_maker.GetEvaluationType(cont_vars, 
     into_disc_string[switch_label_idx], error_flag /*error-sim*/);
+
+  // Avoid neighbor search when eavluation decision is TRUE
+  if(into_disc_string[switch_label_idx] == "TRUE") {
+    IntVector::ordinalType loc;
+    for(loc=0; loc<num_idiv; ++loc)
+      into_disc_int[loc] = -1;
+    return;
+  }
+
+  decision_maker.GetNearestNeighbors(cont_vars,
+    into_disc_int, num_idiv, error_flag /*force-find*/);
 }
 
 //-----------------------------------------------------------------------------
