@@ -75,6 +75,13 @@ AdaptiveJegaOptimizer::AdaptiveJegaOptimizer(ProblemDescDB &prob_db,
 
   EDDY_FUNC_DEBUGSCOPE
 
+  //! Make sure that the inactive view is set to STATE variables.
+  //! NOTE: Here, iterated model can be a Scaling Model when
+  //        user calls for scaling in the input file. Consequently,
+  //        sim_model and iteratedModel do not point at the same thing.
+  iteratedModel->inactive_view(MIXED_STATE);
+  err_model->inactive_view(MIXED_STATE);
+
   //! Exit if AdaptiveJega was called with moga.
   if(methodName == Dakota::MOGA) {
     JEGALOG_II_G(lfatal(), this, text_entry(lfatal(), 
@@ -140,10 +147,9 @@ AdaptiveJegaOptimizer::AdaptiveJegaOptimizer(ProblemDescDB &prob_db,
 
   // iteratedModel is the sim_model set internally 
   // by DakotaOptimizer
-  eval_creator = 
-    make_shared<JegaEvaluatorCreator>(*iteratedModel, 
-                                      *err_model,
-                                      *decision_maker);
+  eval_creator = make_shared<JegaEvaluatorCreator>(*iteratedModel, 
+                                                   *err_model,
+                                                   *decision_maker);
   
 }
 

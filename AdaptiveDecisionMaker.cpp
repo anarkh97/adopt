@@ -100,17 +100,17 @@ void AdaptiveDecisionMaker::GetNearestNeighbors(const RealVector &cont_vars,
   //! One point is reserved for target evaluation id.
   int num_interp_points = num_int_points-1;
 
-  // AN: Throw an error if force find is true but true-db is empty.
-  // This distinction is made so that when decision maker is called
-  // for error calculations one can check if database with true 
-  // evaluations is empty.
+  //! AN: Throw an error if force find is true but true-db is empty.
+  //!     This distinction is made so that when decision maker is called
+  //!     for error calculations one can check if database with true 
+  //!     evaluations is empty.
   if(true_evals.empty() and force) {
     Cerr << "Adaptive SOGA Error: Trying to find nearest neighbors "
          << "in an empty database.\n";
     abort_handler(METHOD_ERROR);
   }
 
-  // Send garbage values when true-db is empty.
+  //! Send garbage values when true-db is empty.
   if(true_evals.empty() or true_evals.size() < num_interp_points) {
     for(int i=0; i<num_int_points; ++i) into[i] = -1;
     return;
@@ -193,14 +193,17 @@ AdaptiveDecisionMaker::GetEvaluationDecision(const RealVector &cont_vars,
   VectorXd query_variance   = gp_model.variance(query);
   VectorXd query_prediction = gp_model.value(query);
 
-  if(query_variance(0) < 1e-2) 
-    into = (query_prediction(0) <= 1e-2) ? "APPROX" : "TRUE";
+  if(std::abs(query_variance(0)) < 1e-2) 
+    into = (std::abs(query_prediction(0)) < 1e-2) ? "APPROX" : "TRUE";
 
   if(verbose>1) { 
     //cont_vars.print(Cout) << 
-    Cout << "variables :\n" << query << "\n";
-    Cout << "variance  : "  << query_variance(0) << "\n";
-    Cout << "prediction: "  << query_prediction(0) << "\n"; 
+    Cout << "\n";
+    Cout << "variables : " << query << "\n";
+    Cout << "variance  : " << query_variance(0) << "\n";
+    Cout << "prediction: " << query_prediction(0) << "\n"; 
+    Cout << "decision  : " << into << "\n";
+    Cout << "\n";
   }
 
 }
@@ -215,9 +218,9 @@ AdaptiveDecisionMaker::RecordEvaluationError(const int eval_id,
 
   const RealVector &stored_vars = true_evals[eval_id];
 
-  // Check if variables match.  This is done to ensure error values stored
-  // in error_vals are mapped to expected continuous variables stored in 
-  // true_evals.
+  //! Check if variables match.  This is done to ensure error values stored
+  //! in error_vals are mapped to expected continuous variables stored in 
+  //! true_evals.
   if(cont_vars != stored_vars) {
     Cerr << "Adaptive SOGA Error: Trying to map error values "
          << "for unknown design variables.\n";
@@ -237,7 +240,7 @@ AdaptiveDecisionMaker::RecordEvaluationDecision(int eval_id,
 {
 
   if(eval_type == "TRUE") {
-    // First check if evaluation id has already been mapped or not.
+    //! First check if evaluation id has already been mapped or not.
     IntRealVectorMap::iterator it = true_evals.find(eval_id);
     if(it != true_evals.end() and verbose>1) {
       Cout << "Adaptive SOGA Warning: Duplicate evaluation ID " << eval_id
@@ -248,7 +251,7 @@ AdaptiveDecisionMaker::RecordEvaluationDecision(int eval_id,
     true_evals[eval_id] = cont_vars;
   }
   else if (eval_type == "APPROX") {
-    // Firt check if evaluation id has already been mapped or not.
+    //! Firt check if evaluation id has already been mapped or not.
     IntRealVectorMap::iterator it = approx_evals.find(eval_id);
     if(it != approx_evals.end() and verbose>1) {
       Cout << "Adaptive SOGA Warning: Duplicate evaluation ID " << eval_id
@@ -277,24 +280,24 @@ AdaptiveDecisionMaker::LoadGaussianProcesssOptions()
 
   options.set("verbosity", verbose);
 
-  // rng options.
+  //! rng options.
   options.set("gp seed", 42);
-  // scaling options
+  //! scaling options
   options.set("scaler name", "none");
   options.set("standardize response", false);
 
-  // kernel options
+  //! kernel options
   options.set("kernel type", "squared exponential");
 
-  // polynomial trend options.
+  //! polynomial trend options.
   options.sublist("Trend").set("estimate trend", true);
 
-  // nugget options.
+  //! nugget options.
   options.sublist("Nugget").set("estimate nugget", true);
   options.sublist("Nugget").sublist("Bounds").set("lower bound", 0.0);
   options.sublist("Nugget").sublist("Bounds").set("upper bound", 1.0);
 
-  // hyperparameter optimization options.
+  //! hyperparameter optimization options.
   options.set("num restarts", 20);
 
   gp_model.set_options(options);
@@ -310,12 +313,11 @@ AdaptiveDecisionMaker::LoadParameters(const IntRealVectorMap &from,
 
   int var_dim = from.begin()->second.length();
 
-  // prepare for GP model.
-  // Dakota GP model wants parameters in an Eigen::MatrixXd
-  // with rows as the number of points and columns assert
-  // number of dimensions (or features).
+  //! Dakota GP model wants parameters in an Eigen::MatrixXd
+  //! with rows as the number of points and columns assert
+  //! number of dimensions (or features).
   
-  // allocate size to MatrixXd
+  //! allocate size to MatrixXd
   into.resize(from.size(), var_dim);
 
   IntRealVectorMap::const_iterator it = from.begin();
@@ -340,11 +342,10 @@ AdaptiveDecisionMaker::LoadResponses(const IntRealMap &from,
                                      VectorXd &into) const
 {
 
-  // prepare for GP model.
-  // Dakota GP model wants responses (i.e., true or observed values)
-  // in an Eigen::VectorXd with rows as the number of points.
+  //! Dakota GP model wants responses (i.e., true or observed values)
+  //! in an Eigen::VectorXd with rows as the number of points.
 
-  // allocate size to VectorXd
+  //! allocate size to VectorXd
   into.resize(from.size());
   
   IntRealMap::const_iterator it = from.begin();
@@ -376,7 +377,7 @@ AdaptiveDecisionMaker::BuildGaussianProcessModel(const MatrixXd &samples,
     split_ratio = 0.2;
   }
 
-  // split data set into training and testing sets.
+  //! split data set into training and testing sets.
   int var_dim     = samples.cols();
   int num_samples = samples.rows();
   int num_holdout = (int)(num_samples*split_ratio);
@@ -397,7 +398,7 @@ AdaptiveDecisionMaker::BuildGaussianProcessModel(const MatrixXd &samples,
   VectorXi index_permutations = 
     VectorXi::LinSpaced(num_samples, 0, num_samples-1);
 
-  // randomize indices (using dakota's random_permutation)
+  //! randomize indices (using dakota's random_permutation)
   if(seed == 0) 
     random_permutation(num_samples, (unsigned int)std::time(0), 
                        index_permutations);
@@ -409,14 +410,14 @@ AdaptiveDecisionMaker::BuildGaussianProcessModel(const MatrixXd &samples,
   int test_index = 0;
   for(int i=0; i<num_samples; ++i) {
 
-    // first "num_train" samples are used for training.
+    //! first "num_train" samples are used for training.
     if(i < num_train) {
       int samples_index = index_permutations(i);
       training_samples.row(train_index) = samples.row(samples_index);
       training_values(train_index, 0) = values(samples_index, 0);
       train_index++;
     }
-    // next populate test set.
+    //! next populate test set.
     else {
       int samples_index = index_permutations(i);
       testing_samples.row(test_index) = samples.row(samples_index);
@@ -425,14 +426,14 @@ AdaptiveDecisionMaker::BuildGaussianProcessModel(const MatrixXd &samples,
     }
   }
   
-  // build the model
+  //! build the model
   gp_model.build(training_samples, training_values);
   
-  // test the model
+  //! test the model
   VectorXd prediction_values = 
     gp_model.value(testing_samples);
 
-  // calculate loss 
+  //! calculate loss 
   loss = (prediction_values - testing_values).norm();
   loss = std::sqrt(loss/num_holdout);
 
@@ -459,7 +460,7 @@ AdaptiveDecisionMaker::Train()
 
   ++num_train_calls;
 
-  // prepare to train 
+  //! Prepare to train 
   MatrixXd parameters; // continuous design variables
   VectorXd responses; // error values for the designs
 

@@ -18,34 +18,14 @@ using namespace JEGA::Algorithms;
 //-----------------------------------------------------------------------------
 
 JegaEvaluator::JegaEvaluator(GeneticAlgorithm &algorithm, 
-                             Model &tmodel_, 
-                             Model &emodel_,
+                             Model &sim_model_, 
+                             Model &err_model_,
                              AdaptiveDecisionMaker &decision_maker_)
-             : GeneticAlgorithmEvaluator(algorithm), sim_model(tmodel_), 
-               error_model(emodel_), decision_maker(decision_maker_)
+             : GeneticAlgorithmEvaluator(algorithm), sim_model(sim_model_), 
+               error_model(err_model_), decision_maker(decision_maker_)
 {
   EDDY_FUNC_DEBUGSCOPE
-
-  StringMultiArrayConstView disc_string_labels = 
-    ModelUtils::inactive_discrete_string_variable_labels(sim_model);
-  
-  size_t idx_cntr=0;
-  switch_label_idx=-1;
-  for(const auto &label : disc_string_labels) {
-
-    if(label == "SWITCH") {
-      switch_label_idx = idx_cntr;
-      break;
-    }
-
-  }
-
-  if(switch_label_idx<0) {
-    JEGALOG_II_G_F(this, text_entry(lfatal(),
-                 "Adaptive JEGA Error: Optimizer requires a "
-                 "discrete string set state variable with "
-                 "label \"SWITCH\".\n"))
-  }
+  SetupLabelIndex();
 }
 
 //-----------------------------------------------------------------------------
@@ -84,12 +64,10 @@ void JegaEvaluator::SetupLabelIndex()
   size_t idx_cntr=0;
   switch_label_idx=-1;
   for(const auto &label : disc_string_labels) {
-
     if(label == "SWITCH") {
       switch_label_idx = idx_cntr;
       break;
     }
-
   }
 
   if(switch_label_idx<0) {
@@ -613,9 +591,9 @@ JegaEvaluator::Evaluate(DesignGroup &group)
       }
     }
 
-  }
+    decision_maker.Train();
 
-  decision_maker.Train();
+  }
 
   return ret;
 }
