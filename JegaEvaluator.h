@@ -101,6 +101,7 @@ protected:
                        JEGA::Utilities::Design& into) const;
 
   //! Functions to update decision maker.
+  bool RunErrorModel();
   void RecordEvaluationInDecisionMaker(const int id,
                                        const Dakota::RealVector& cont_vars,
                                        const Dakota::StringMultiArray& disc_strings);

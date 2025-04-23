@@ -34,8 +34,8 @@ double EuclideanDistance(const RealVector &v1, const RealVector &v2)
 //------------------------------------------------------------------------------
 
 AdaptiveDecisionMaker::AdaptiveDecisionMaker(const ProblemDescDB &problem_db_)
-                     : problem_db(problem_db_), true_evals(), approx_evals(), 
-                       error_vals(), ready_to_predict(false), num_train_calls(0)
+                     : problem_db(problem_db_), id2var(), id2type(), 
+                       id2error(), ready_to_predict(false), num_train_calls(0)
 {
 
   short dakota_level = problem_db.get_short("method.output");
@@ -88,48 +88,63 @@ AdaptiveDecisionMaker::ReadOptionsFile(const String filename)
 
 //------------------------------------------------------------------------------
 
-void AdaptiveDecisionMaker::GetNearestNeighbors(const RealVector &cont_vars, 
-                                                IntVector &into, 
-                                                size_t num_int_points,
-                                                bool force)
+void AdaptiveDecisionMaker::GetEvaluationAndNeighbors(const RealVector &cont_vars, 
+                                                      String &into_type,
+                                                      IntVector &into_neighbors, 
+                                                      size_t num_points,
+                                                      bool flag)
 {
 
-  if(into.length() != num_int_points) 
-    into.size(num_int_points);
+  //! First get evaluation type "ERROR", "TRUE", "APPROX"
+  GetEvaluationType(cont_vars, into_type, flag);
+
+  //! Avoid neighbor calculation if evaluation is "TRUE"
+  if(into_type == "TRUE") {
+    for(int i=0; i<num_points; ++i) 
+      into_neighbors[i] = -1;
+    return;
+  }
+
+  //! Fill up neighbors for "ERROR" and "APPROX" types
+  GetNearestNeighbors(cont_vars, into_neighbors, num_points);
+
+}
+
+//------------------------------------------------------------------------------
+
+void AdaptiveDecisionMaker::GetNearestNeighbors(const RealVector &cont_vars, 
+                                                IntVector &into, 
+                                                size_t num_points)
+{
+
+  if(into.length() != num_points) 
+    into.size(num_points);
 
   //! One point is reserved for target evaluation id.
-  int num_interp_points = num_int_points-1;
+  int num_interp_points = num_points-1;
 
-  //! AN: Throw an error if force find is true but true-db is empty.
-  //!     This distinction is made so that when decision maker is called
-  //!     for error calculations one can check if database with true 
-  //!     evaluations is empty.
-  if(true_evals.empty() and force) {
+  //! Throw an error if force find is true but true-db is empty.
+  if(id2var.empty()) {
     Cerr << "Adaptive SOGA Error: Trying to find nearest neighbors "
          << "in an empty database.\n";
     abort_handler(METHOD_ERROR);
   }
 
-  //! Send garbage values when true-db is empty.
-  if(true_evals.empty() or true_evals.size() < num_interp_points) {
-    for(int i=0; i<num_int_points; ++i) into[i] = -1;
-    return;
+  //! Throw an error true-db does not have enough points
+  if(id2var.size() < num_interp_points) {
+    Cerr << "Adaptive SOGA Error: Number of true evaluations stored "
+         << "(" << id2var.size() << ") "
+         << "is less than number of neighbors requested "
+         << "(" << num_interp_points << ").\n";
+    abort_handler(METHOD_ERROR);
   }
-
-  //if(true_evals.size() < num_interp_points) {
-  //  Cerr << "Adaptive SOGA Error: Number of true evaluations stored "
-  //       << "(" << true_evals.size() << ") "
-  //       << "is less than number of neighbors requested "
-  //       << "(" << num_interp_points << ").\n";
-  //  abort_handler(METHOD_ERROR);
-  //}
 
   // AN: Currently doing naive search.
   // TODO: Could use KDTree.
   
   vector<pair<double, int>> dist2targ;
-  IntRealVectorMap::const_iterator tr_it = true_evals.begin();
-  const IntRealVectorMap::const_iterator tr_e = true_evals.end();
+  IntRealVectorMap::const_iterator tr_it = id2var.begin();
+  const IntRealVectorMap::const_iterator tr_e = id2var.end();
   for(; tr_it!=tr_e; ++tr_it) {
     double d = EuclideanDistance(tr_it->second, cont_vars);
     //if(d == 0) continue; // skip the point itself.
@@ -138,10 +153,10 @@ void AdaptiveDecisionMaker::GetNearestNeighbors(const RealVector &cont_vars,
 
   sort(dist2targ.begin(), dist2targ.end());
 
-  // fill up first "num_int_points" into IntVector
+  // fill up first "num_points" into IntVector
   // Note: first point will be the current point
   // itself (i.e., target)
-  for(int i=0; i<num_int_points; ++i) {
+  for(int i=0; i<num_points; ++i) {
     into[i] = dist2targ[i].second;
   }
 
@@ -152,38 +167,36 @@ void AdaptiveDecisionMaker::GetNearestNeighbors(const RealVector &cont_vars,
 void
 AdaptiveDecisionMaker::GetEvaluationType(const RealVector &cont_vars,
                                          String &into,
-                                         const bool error_sim)
+                                         bool flag)
 {
 
   //! These are simulations for computing errors
   //! for true design evaluations.
-  if(error_sim) {
+  if(flag) {
     into = "ERROR";
     return;
   }
 
-  //! These are actual simulations (high- or low-fidelity)
-  GetEvaluationDecision(cont_vars, into); 
-
-}
-
-//------------------------------------------------------------------------------
-
-void
-AdaptiveDecisionMaker::GetEvaluationDecision(const RealVector &cont_vars,
-                                             String &into)
-{
-  
   //! Set the base case
   into = "TRUE";
 
   //! Return when databse is empty.
-  if(true_evals.empty()) 
+  if(id2var.empty()) 
     return;
   
   //! Return when GP model is not ready.
   if(!ready_to_predict)
     return;
+
+  //! Check if there is an existing decision for this variable
+  IntRealVectorMap::const_iterator it = id2var.begin();
+  const IntRealVectorMap::const_iterator e = id2var.end();
+  for(; it!=e; ++it) {
+    if(it->second == cont_vars) {
+      into = id2type[it->first];
+      return;
+    }
+  }
 
   //! Use GP model to predict the evaluation decision.
   MatrixXd query(1, cont_vars.length());
@@ -193,7 +206,7 @@ AdaptiveDecisionMaker::GetEvaluationDecision(const RealVector &cont_vars,
   VectorXd query_variance   = gp_model.variance(query);
   VectorXd query_prediction = gp_model.value(query);
 
-  if(3*query_variance(0) < 1e-2) 
+  if(std::abs(3*query_variance(0)) < 1e-2) 
     into = (query_prediction(0) < 1e-2) ? "APPROX" : "TRUE";
 
   if(verbose>1) { 
@@ -216,18 +229,18 @@ AdaptiveDecisionMaker::RecordEvaluationError(const int eval_id,
                                              const double &error)
 {
 
-  const RealVector &stored_vars = true_evals[eval_id];
+  const RealVector &stored_vars = id2var[eval_id];
 
   //! Check if variables match.  This is done to ensure error values stored
-  //! in error_vals are mapped to expected continuous variables stored in 
-  //! true_evals.
+  //! in id2error are mapped to expected continuous variables stored in 
+  //! id2var.
   if(cont_vars != stored_vars) {
     Cerr << "Adaptive SOGA Error: Trying to map error values "
          << "for unknown design variables.\n";
     abort_handler(METHOD_ERROR);
   }
 
-  error_vals[eval_id] = error;
+  id2error[eval_id] = error;
 
 }
 
@@ -241,32 +254,38 @@ AdaptiveDecisionMaker::RecordEvaluationDecision(int eval_id,
 
   if(eval_type == "TRUE") {
     //! First check if evaluation id has already been mapped or not.
-    IntRealVectorMap::iterator it = true_evals.find(eval_id);
-    if(it != true_evals.end() and verbose>1) {
+    IntRealVectorMap::iterator it = id2var.find(eval_id);
+    if(it != id2var.end() and verbose>1) {
       Cout << "Adaptive SOGA Warning: Duplicate evaluation ID " << eval_id
            << ", previously mapped to variables: " << it->second
            << ". Skipping ...\n";
     }
 
-    true_evals[eval_id] = cont_vars;
+    id2var[eval_id] = cont_vars;
   }
-  else if (eval_type == "APPROX") {
-    //! Firt check if evaluation id has already been mapped or not.
-    IntRealVectorMap::iterator it = approx_evals.find(eval_id);
-    if(it != approx_evals.end() and verbose>1) {
-      Cout << "Adaptive SOGA Warning: Duplicate evaluation ID " << eval_id
-           << ", previously mapped to variables: " << it->second
-           << ". Skipping ...\n";
-    }
-
-    approx_evals[eval_id] = cont_vars;
+  else if(eval_type == "ERROR") {
+    Cout << "Adaptive SOGA Warning: Error evaluations are not stored in "
+         << "the decision maker. Ignoring...\n";
+    return;
   }
-  else {
+  else if(eval_type != "APPROX") {
     Cerr << "Adaptive SOGA Error: I do not understand evaluation type "
          << eval_type << ".\n";
     abort_handler(METHOD_ERROR);
   }
 
+  //! Store the evaluation ids for only for "TRUE" and "APPROX" types
+  id2type[eval_id] = eval_type;
+
+}
+
+//------------------------------------------------------------------------------
+
+bool
+AdaptiveDecisionMaker::NeedToComputeErrors()
+{
+  bool ret = id2var.size() != id2error.size();
+  return ret;
 }
 
 //------------------------------------------------------------------------------
@@ -464,8 +483,8 @@ AdaptiveDecisionMaker::Train()
   MatrixXd parameters; // continuous design variables
   VectorXd responses; // error values for the designs
 
-  LoadParameters(true_evals, parameters);
-  LoadResponses(error_vals, responses);
+  LoadParameters(id2var, parameters);
+  LoadResponses(id2error, responses);
 
   //! Return when the database is too small (i.e., build failed).
   double loss = 0.0;

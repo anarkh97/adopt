@@ -832,7 +832,13 @@ AdaptiveJegaOptimizer::LoadDakotaResponses(const Design &from, Variables &vars,
                                            Response &resp) const
 {
 
-    RealVector c_vars(numContinuousVars);
+  size_t num_cv = vars.cv();
+  size_t num_idiv = vars.idiv();
+  size_t num_idsv = vars.idsv();
+
+  RealVector c_vars(num_cv);
+  IntVector d_i_vars(num_idiv);
+  StringMultiArray d_s_vars(boost::extents[num_idsv]);
 
 //PDH: JEGA variables to Dakota variables.
 //     Don't know what the JEGA data structure is.  These are all
@@ -843,7 +849,31 @@ AdaptiveJegaOptimizer::LoadDakotaResponses(const Design &from, Variables &vars,
   for(size_t i=0; i<numContinuousVars; ++i)
     c_vars[i] = from.GetVariableValue(i);
 
+  //! Get information from the decision maker
+  
+  StringMultiArrayConstView d_s_labels = 
+    vars.inactive_discrete_string_variable_labels();
+
+  size_t index=-1;
+  size_t counter=0;
+  for(const auto &label : d_s_labels) {
+    if(label == "SWITCH") {
+      index = counter;
+      break;
+    }
+    counter++;
+  }
+
+  decision_maker->GetEvaluationAndNeighbors(c_vars, d_s_vars[index], 
+    d_i_vars, num_idiv);
+
+  size_t idsv_len = d_s_vars.num_elements();
+  StringMultiArrayConstView idsv_view = d_s_vars[
+    boost::indices[idx_range(0,idsv_len)]];
+
   vars.continuous_variables(c_vars);
+  vars.inactive_discrete_int_variables(d_i_vars);
+  vars.inactive_discrete_string_variables(idsv_view);
 
 //PDH: JEGA responses to Dakota responses.
 //     Don't know what the JEGA data structure is.  These are all

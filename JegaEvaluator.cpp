@@ -68,6 +68,7 @@ void JegaEvaluator::SetupLabelIndex()
       switch_label_idx = idx_cntr;
       break;
     }
+    idx_cntr++;
   }
 
   if(switch_label_idx<0) {
@@ -205,19 +206,9 @@ JegaEvaluator::SetStateVariables(const RealVector& cont_vars,
   
   // Set inactive discrete string set variable -> Evaluation Type
   // Set inactive discrete integer variable -> Neighbor evaluation IDs.  
-  decision_maker.GetEvaluationType(cont_vars, 
-    into_disc_string[switch_label_idx], error_flag /*error-sim*/);
-
-  // Avoid neighbor search when eavluation decision is TRUE
-  if(into_disc_string[switch_label_idx] == "TRUE") {
-    IntVector::ordinalType loc;
-    for(loc=0; loc<num_idiv; ++loc)
-      into_disc_int[loc] = -1;
-    return;
-  }
-
-  decision_maker.GetNearestNeighbors(cont_vars,
-    into_disc_int, num_idiv, error_flag /*force-find*/);
+  decision_maker.GetEvaluationAndNeighbors(
+    cont_vars, into_disc_string[switch_label_idx], 
+    into_disc_int, num_idiv, error_flag);
 }
 
 //-----------------------------------------------------------------------------
@@ -289,6 +280,17 @@ JegaEvaluator::RecordErrorInDecisionMaker(const int id, /* evaluation id from tr
   
   decision_maker.RecordEvaluationError(id, cont_vars, from[0]);
 
+}
+
+//-----------------------------------------------------------------------------
+
+bool
+JegaEvaluator::RunErrorModel()
+{
+  EDDY_FUNC_DEBUGSCOPE
+
+  bool ret = decision_maker.NeedToComputeErrors();
+  return ret;
 }
 
 //-----------------------------------------------------------------------------
@@ -499,7 +501,7 @@ JegaEvaluator::Evaluate(DesignGroup &group)
   // Now get the error estimate at each true evaluation using the error_model
   // Only run error_model when sim_model was successfull. Otherwise, we let
   // the code to fall through back to Dakota for printing errors messages.
-  if(ret) {
+  if(ret and RunErrorModel()) {
 
     // Now we go over all true designs and map errors.
     IntRealVectorMap::const_iterator tr_it(
@@ -508,8 +510,7 @@ JegaEvaluator::Evaluate(DesignGroup &group)
       decision_maker.GetEndForTrueDatabase());
 
     JEGALOG_II(GetLogger(), ldebug(), this,
-      text_entry(ldebug(), GetName() + ": Performing group error evaluation. "
-                 + std::to_string(decision_maker.GetTrueDatabaseSize())))
+      text_entry(ldebug(), GetName() + ": Performing group error evaluation."))
 
     for(; tr_it!=tr_e; ++tr_it) {
 

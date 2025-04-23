@@ -10,28 +10,25 @@
 // Eigen includes.
 #include<Eigen/Dense>
 
+typedef std::map<int, Dakota::String> IntStringMap;
+
 /************************************************
  *
  ***********************************************/
 
 class AdaptiveDecisionMaker {
 
-  //! Verbosity
-  int verbose;
-
-  //! flag to switch on the GP model.
-  bool ready_to_predict;
-
-  //! Number of times train is called.
-  int num_train_calls;
+  int verbose; //! Verbosity
+  int num_train_calls; //! Number of times model is trained.
+  bool ready_to_predict; //! flag to switch on the GP model.
 
   //! Problem description
   const Dakota::ProblemDescDB& problem_db;
 
   //! Database containers
-  Dakota::IntRealVectorMap true_evals; // internal var.
-  Dakota::IntRealVectorMap approx_evals; // internal var.
-  Dakota::IntRealMap       error_vals; // internal var. 
+  Dakota::IntRealVectorMap id2var; // internal var.
+  Dakota::IntRealMap       id2error; // internal var. 
+  IntStringMap             id2type; // internal var.
 
   //! Gaussian regression model --- operates on approximation errors.
   dakota::surrogates::GaussianProcess gp_model;
@@ -44,7 +41,7 @@ public:
   ~AdaptiveDecisionMaker() { };
 
   //! Iterating functions
-  size_t GetTrueDatabaseSize() const { return true_evals.size(); }
+  size_t GetTrueDatabaseSize() const { return id2var.size(); }
   Dakota::IntRealVectorMap::iterator GetBeginForTrueDatabase();
   Dakota::IntRealVectorMap::const_iterator GetBeginForTrueDatabase() const;
 
@@ -53,15 +50,15 @@ public:
 
   //! Functions that interface with Dakota's Iterator (Optimizer)
   //! Getters
-  void GetNearestNeighbors(const Dakota::RealVector& variables,
-                           Dakota::IntVector& into,
-                           size_t num_int_points,
-                           bool force=false);
-  void GetEvaluationType(const Dakota::RealVector& variables,
-                         Dakota::String& into,
-                         const bool error_sim=false);
+  void GetEvaluationAndNeighbors(const Dakota::RealVector& variables,
+                                 Dakota::String& into_type,
+                                 Dakota::IntVector& into_neighbors,
+                                 size_t num_points,
+                                 bool flag = false);
+
 
   //! Update functions
+  bool NeedToComputeErrors();
   void RecordEvaluationError(const int id, 
                              const Dakota::RealVector& variables, 
                              const double& error);
@@ -76,8 +73,12 @@ private:
 
   void ReadOptionsFile(const Dakota::String filename);
 
-  void GetEvaluationDecision(const Dakota::RealVector& variables,
-                             Dakota::String& into);
+  void GetNearestNeighbors(const Dakota::RealVector& variables,
+                           Dakota::IntVector& into,
+                           size_t num_int_points);
+  void GetEvaluationType(const Dakota::RealVector& variables,
+                         Dakota::String& into,
+                         bool flag=false);
 
   //! Helper functions to interface with dakota::surrogates
   void LoadGaussianProcesssOptions();
@@ -103,25 +104,25 @@ private:
 inline Dakota::IntRealVectorMap::iterator 
 AdaptiveDecisionMaker::GetBeginForTrueDatabase()
 {
-  return true_evals.begin();
+  return id2var.begin();
 }
 
 inline Dakota::IntRealVectorMap::const_iterator
 AdaptiveDecisionMaker::GetBeginForTrueDatabase() const
 {
-  return true_evals.begin();
+  return id2var.begin();
 }
 
 inline Dakota::IntRealVectorMap::iterator 
 AdaptiveDecisionMaker::GetEndForTrueDatabase()
 {
-  return true_evals.end();
+  return id2var.end();
 }
 
 inline Dakota::IntRealVectorMap::const_iterator
 AdaptiveDecisionMaker::GetEndForTrueDatabase() const
 {
-  return true_evals.end();
+  return id2var.end();
 }
 
 #endif
