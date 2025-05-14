@@ -203,11 +203,14 @@ AdaptiveDecisionMaker::GetEvaluationType(const RealVector &cont_vars,
   for(int i=0; i<cont_vars.length(); ++i)
     query(0,i) = cont_vars[i];
 
-  VectorXd query_variance   = gp_model.variance(query);
   VectorXd query_prediction = gp_model.value(query);
+  VectorXd query_variance   = gp_model.variance(query);
+  
+  double standard_dev = std::sqrt(query_variance(0));
 
-  if(std::abs(3*query_variance(0)) < 1e-2) 
+  if(3*standard_dev < 1e-2) { // check if 99.7% CI is narrow 
     into = (query_prediction(0) < 1e-2) ? "APPROX" : "TRUE";
+  }
 
   if(verbose>1) { 
     //cont_vars.print(Cout) << 
