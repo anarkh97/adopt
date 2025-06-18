@@ -34,7 +34,6 @@ private:
 
   Dakota::Model& sim_model;
   Dakota::Model& error_model;
-
   AdaptiveDecisionMaker& decision_maker;
 
 public:

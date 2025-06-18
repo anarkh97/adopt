@@ -206,9 +206,9 @@ JegaEvaluator::SetStateVariables(const RealVector& cont_vars,
   
   // Set inactive discrete string set variable -> Evaluation Type
   // Set inactive discrete integer variable -> Neighbor evaluation IDs.  
-  decision_maker.GetEvaluationAndNeighbors(
-    cont_vars, into_disc_string[switch_label_idx], 
-    into_disc_int, num_idiv, error_flag);
+  decision_maker.GetEvalTypeAndMetaData(cont_vars, 
+    into_disc_string[switch_label_idx], into_disc_int, 
+    num_idiv-1, error_flag);
 }
 
 //-----------------------------------------------------------------------------

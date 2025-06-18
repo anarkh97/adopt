@@ -864,8 +864,8 @@ AdaptiveJegaOptimizer::LoadDakotaResponses(const Design &from, Variables &vars,
     counter++;
   }
 
-  decision_maker->GetEvaluationAndNeighbors(c_vars, d_s_vars[index], 
-    d_i_vars, num_idiv);
+  decision_maker->GetEvalTypeAndMetaData(c_vars, d_s_vars[index], 
+    d_i_vars, num_idiv-1);
 
   size_t idsv_len = d_s_vars.num_elements();
   StringMultiArrayConstView idsv_view = d_s_vars[

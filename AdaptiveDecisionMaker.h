@@ -50,11 +50,11 @@ public:
 
   //! Functions that interface with Dakota's Iterator (Optimizer)
   //! Getters
-  void GetEvaluationAndNeighbors(const Dakota::RealVector& variables,
-                                 Dakota::String& into_type,
-                                 Dakota::IntVector& into_neighbors,
-                                 size_t num_points,
-                                 bool flag = false);
+  void GetEvalTypeAndMetaData(const Dakota::RealVector& variables,
+                              Dakota::String& into_type,
+                              Dakota::IntVector& into_metadata,
+                              size_t num_points,
+                              bool flag=false);
 
 
   //! Update functions
@@ -73,9 +73,11 @@ private:
 
   void ReadOptionsFile(const Dakota::String filename);
 
-  void GetNearestNeighbors(const Dakota::RealVector& variables,
-                           Dakota::IntVector& into,
-                           size_t num_int_points);
+  void GetTargetAndNearestNeighbors(const Dakota::RealVector& variables,
+                                    int& target,
+                                    Dakota::IntVector& candidates,
+                                    size_t num_int_points,
+                                    bool flag=false);
   void GetEvaluationType(const Dakota::RealVector& variables,
                          Dakota::String& into,
                          bool flag=false);

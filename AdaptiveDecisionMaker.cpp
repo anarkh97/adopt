@@ -88,40 +88,49 @@ AdaptiveDecisionMaker::ReadOptionsFile(const String filename)
 
 //------------------------------------------------------------------------------
 
-void AdaptiveDecisionMaker::GetEvaluationAndNeighbors(const RealVector &cont_vars, 
-                                                      String &into_type,
-                                                      IntVector &into_neighbors, 
-                                                      size_t num_points,
-                                                      bool flag)
+void AdaptiveDecisionMaker::GetEvalTypeAndMetaData(const RealVector &cont_vars, 
+                                                   String &into_type,
+                                                   IntVector &into_metadata, 
+                                                   size_t num_points,
+                                                   bool flag)
 {
+
+  assert(into_metadata.length() == num_points+1);
 
   //! First get evaluation type "ERROR", "TRUE", "APPROX"
   GetEvaluationType(cont_vars, into_type, flag);
 
   //! Avoid neighbor calculation if evaluation is "TRUE"
   if(into_type == "TRUE") {
-    for(int i=0; i<num_points; ++i) 
-      into_neighbors[i] = -1;
+    for(int i=0; i<into_metadata.length(); ++i) 
+      into_metadata[i] = -1;
     return;
   }
 
+  int target = -1; //! target evaluation id for "ERROR" runs.
+  IntVector candidates(num_points);
+  GetTargetAndNearestNeighbors(cont_vars, target, candidates, num_points, flag);
+
   //! Fill up neighbors for "ERROR" and "APPROX" types
-  GetNearestNeighbors(cont_vars, into_neighbors, num_points);
+  into_metadata[0] = (into_type == "APPROX") ? -1 : target;
+  for(int i=0; i<num_points; ++i) {
+    into_metadata[i+1] = candidates[i];
+  }
 
 }
 
 //------------------------------------------------------------------------------
 
-void AdaptiveDecisionMaker::GetNearestNeighbors(const RealVector &cont_vars, 
-                                                IntVector &into, 
-                                                size_t num_points)
+void AdaptiveDecisionMaker::GetTargetAndNearestNeighbors(const RealVector &cont_vars, 
+                                                         int &target,
+                                                         IntVector &candidates, 
+                                                         size_t num_points,
+                                                         bool flag)
 {
 
-  if(into.length() != num_points) 
-    into.size(num_points);
-
-  //! One point is reserved for target evaluation id.
-  int num_interp_points = num_points-1;
+  if(candidates.length() != num_points) {
+    candidates.size(num_points);
+  }
 
   //! Throw an error if force find is true but true-db is empty.
   if(id2var.empty()) {
@@ -131,11 +140,11 @@ void AdaptiveDecisionMaker::GetNearestNeighbors(const RealVector &cont_vars,
   }
 
   //! Throw an error true-db does not have enough points
-  if(id2var.size() < num_interp_points) {
+  if(id2var.size() < num_points) {
     Cerr << "Adaptive SOGA Error: Number of true evaluations stored "
          << "(" << id2var.size() << ") "
          << "is less than number of neighbors requested "
-         << "(" << num_interp_points << ").\n";
+         << "(" << num_points << ").\n";
     abort_handler(METHOD_ERROR);
   }
 
@@ -146,18 +155,38 @@ void AdaptiveDecisionMaker::GetNearestNeighbors(const RealVector &cont_vars,
   IntRealVectorMap::const_iterator tr_it = id2var.begin();
   const IntRealVectorMap::const_iterator tr_e = id2var.end();
   for(; tr_it!=tr_e; ++tr_it) {
+    //! NOTE: In asynchronous runs, an evaluation's ID and its associated
+    //! variables are registered in our data containers as soon as the job
+    //! is queued. Because the simulation might still be running, we skip
+    //! any "true-evaluation" IDs that don't yet have an error entry, as
+    //! the errors are logged only after the evaluation finishes.
+    
+    if(!flag and id2error.find(tr_it->first) == id2error.end()) {
+      //! This check is bypassed when flag is set to true, which is the
+      //! case for error evaluations.
+      continue;
+    }
+
     double d = EuclideanDistance(tr_it->second, cont_vars);
-    //if(d == 0) continue; // skip the point itself.
     dist2targ.push_back({d, tr_it->first});
   }
 
   sort(dist2targ.begin(), dist2targ.end());
 
-  // fill up first "num_points" into IntVector
-  // Note: first point will be the current point
-  // itself (i.e., target)
-  for(int i=0; i<num_points; ++i) {
-    into[i] = dist2targ[i].second;
+  // fill up first "num_points" into candidates 
+  int c=0;
+  for(int i=0; i<dist2targ.size(); ++i) {
+    if(dist2targ[i].first == 0) {
+      target = dist2targ[i].second;
+      continue;
+    }
+
+    if(c >= num_points) {
+      break;
+    }
+
+    candidates[c] = dist2targ[i].second;
+    ++c;
   }
 
 }
