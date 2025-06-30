@@ -91,12 +91,19 @@ private:
                                  double split_ratio=0.0,
                                  /* default value of dakota::surrogates*/
                                  const size_t seed=42); 
+
   void CrossValidateGausssianModel() const;
 
   void LoadParameters(const Dakota::IntRealVectorMap& from, 
                       Eigen::MatrixXd& into) const;
   void LoadResponses(const Dakota::IntRealMap& from, 
                      Eigen::VectorXd& into) const;
+
+  //! Output functions
+  void WriteGaussianProcessModel();
+  void WriteCurrentModelResults(const Eigen::MatrixXd &parameters,
+                                const Eigen::VectorXd &responses,
+                                const double loss);
 
 };
 

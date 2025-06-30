@@ -133,14 +133,14 @@ void AdaptiveDecisionMaker::GetTargetAndNearestNeighbors(const RealVector &cont_
   }
 
   //! Throw an error if force find is true but true-db is empty.
-  if(id2var.empty()) {
+  if(flag and id2var.empty()) {
     Cerr << "Adaptive SOGA Error: Trying to find nearest neighbors "
          << "in an empty database.\n";
     abort_handler(METHOD_ERROR);
   }
 
   //! Throw an error true-db does not have enough points
-  if(id2var.size() < num_points) {
+  if(flag and id2var.size() < num_points) {
     Cerr << "Adaptive SOGA Error: Number of true evaluations stored "
          << "(" << id2var.size() << ") "
          << "is less than number of neighbors requested "
@@ -210,12 +210,14 @@ AdaptiveDecisionMaker::GetEvaluationType(const RealVector &cont_vars,
   into = "TRUE";
 
   //! Return when databse is empty.
-  if(id2var.empty()) 
+  if(id2var.empty()) {
     return;
+  }
   
   //! Return when GP model is not ready.
-  if(!ready_to_predict)
+  if(!ready_to_predict) {
     return;
+  }
 
   //! Check if there is an existing decision for this variable
   IntRealVectorMap::const_iterator it = id2var.begin();
@@ -238,16 +240,16 @@ AdaptiveDecisionMaker::GetEvaluationType(const RealVector &cont_vars,
   double standard_dev = std::sqrt(query_variance(0));
 
   if(3*standard_dev < 1e-2) { // check if 99.7% CI is narrow 
-    into = (query_prediction(0) < 1e-2) ? "APPROX" : "TRUE";
+    into = (query_prediction(0) < 1.3e-2) ? "APPROX" : "TRUE";
   }
 
   if(verbose>1) { 
     //cont_vars.print(Cout) << 
     Cout << "\n";
-    Cout << "variables : " << query << "\n";
-    Cout << "variance  : " << query_variance(0) << "\n";
-    Cout << "prediction: " << query_prediction(0) << "\n"; 
-    Cout << "decision  : " << into << "\n";
+    Cout << "variables  : " << query << "\n";
+    Cout << "uncertainty: " << standard_dev << "\n";
+    Cout << "prediction : " << query_prediction(0) << "\n"; 
+    Cout << "decision   : " << into << "\n";
     Cout << "\n";
   }
 
@@ -287,13 +289,16 @@ AdaptiveDecisionMaker::RecordEvaluationDecision(int eval_id,
   if(eval_type == "TRUE") {
     //! First check if evaluation id has already been mapped or not.
     IntRealVectorMap::iterator it = id2var.find(eval_id);
-    if(it != id2var.end() and verbose>1) {
-      Cout << "Adaptive SOGA Warning: Duplicate evaluation ID " << eval_id
-           << ", previously mapped to variables: " << it->second
-           << ". Skipping ...\n";
+    if(it != id2var.end()) {
+      if(verbose>1) {
+        Cout << "Adaptive SOGA Warning: Duplicate evaluation ID " << eval_id
+             << ", previously mapped to variables: " << it->second
+             << ". Skipping ...\n";
+      }
     }
-
-    id2var[eval_id] = cont_vars;
+    else {
+      id2var[eval_id] = cont_vars;
+    }
   }
   else if(eval_type == "ERROR") {
     Cout << "Adaptive SOGA Warning: Error evaluations are not stored in "
@@ -307,6 +312,14 @@ AdaptiveDecisionMaker::RecordEvaluationDecision(int eval_id,
   }
 
   //! Store the evaluation ids for only for "TRUE" and "APPROX" types
+  IntStringMap::iterator it = id2type.find(eval_id);
+  if(it != id2type.end() and verbose > 1) {
+    Cout << "Adaptive SOGA Warning: Duplicate evaluation ID " << eval_id
+         << ", previously mapped to evalutation type: " << it->second
+         << ".Skipping ...\n";
+    return;
+  }
+
   id2type[eval_id] = eval_type;
 
 }
@@ -534,30 +547,61 @@ AdaptiveDecisionMaker::Train()
            << "to predict.\n";
   }
 
-  //! Debug output
-  if(verbose>1) {
-    Cout << "Training " << num_train_calls 
-         << " (loss = " << loss << ")" << ":\n";
-    VectorXd variance = gp_model.variance(parameters);
-    VectorXd p_responses = gp_model.value(parameters);
-
-    int num_variables = parameters.cols();
-    int num_points = parameters.rows();
-    for(int i=0; i<num_points; ++i) {
-      for(int j=0; j<num_variables; ++j)
-        Cout << parameters(i,j) << "    ";
-      Cout << responses(i) << "    "
-           << p_responses(i) << "    "
-           << variance(i) << "\n";
-    }
-    Cout << "\n";
-  }
+  WriteGaussianProcessModel();
+  WriteCurrentModelResults(parameters, responses, loss);
 
 }
 
 //------------------------------------------------------------------------------
 
+void AdaptiveDecisionMaker::WriteGaussianProcessModel()
+{
+  //! Temporarily save the model -- will be added as an option later.
+  char full_name[256];
+  sprintf(full_name, "GaussianModel_%04d", num_train_calls);
+  String fname(full_name);
+  GaussianProcess::save(gp_model, fname, false);   
+}
+
 //------------------------------------------------------------------------------
+
+void AdaptiveDecisionMaker::WriteCurrentModelResults(const MatrixXd &parameters,
+                                                     const VectorXd &responses,
+                                                     const double loss)
+{
+  //! Output data for plotting/debugging
+  char full_name[256];
+  sprintf(full_name, "GaussianModel_%04d_data.txt", num_train_calls);
+  FILE *model_data_file = fopen(full_name, "w");
+  if(!model_data_file) {
+    Cerr << "Adaptive SOGA Error: Could not open the file "
+         << "\"" << String(full_name) << "\".\n";
+    abort_handler(METHOD_ERROR);
+  }
+
+  int num_variables = parameters.cols();
+  int num_points    = parameters.rows();
+
+  VectorXd variance = gp_model.variance(parameters);
+  VectorXd p_responses = gp_model.value(parameters);
+
+  fprintf(model_data_file, "## Training %04d\n## Loss %16.10e\n", 
+    num_train_calls, loss);
+  for(int i=0; i<num_variables; ++i) {
+    String param_n("Parameter " + std::to_string(i+1));
+    fprintf(model_data_file, "%16s  |  ", param_n.c_str());
+  }
+  fprintf(model_data_file, "%16s  |  %16s  |  %16s\n", "NRMSE", "Prediction", "Uncertainty");
+
+  for(int i=0; i<num_points; ++i) {
+    for(int j=0; j<num_variables; ++j) {
+      fprintf(model_data_file, "%16.10e", parameters(i,j));
+    }
+    fprintf(model_data_file, "%16.10e%16.10e%16.10e\n", 
+      responses(i), p_responses(i), std::sqrt(variance(i)));
+  }
+  fclose(model_data_file);
+}
 
 //------------------------------------------------------------------------------
 
