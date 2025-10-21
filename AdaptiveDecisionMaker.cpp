@@ -494,12 +494,20 @@ AdaptiveDecisionMaker::BuildGaussianProcessModel(const MatrixXd &samples,
   gp_model.build(training_samples, training_values);
   
   //! test the model
-  VectorXd prediction_values = 
-    gp_model.value(testing_samples);
+  VectorXd prediction_values = gp_model.value(testing_samples);
 
-  //! calculate loss 
-  loss = (prediction_values - testing_values).norm();
+  //! calculate loss (root mean squared loss)
+  loss = (prediction_values - testing_values).squaredNorm();
   loss = std::sqrt(loss/num_holdout);
+
+  //! calculate standardized loss
+  //double test_mean   = testing_values.sum() / num_holdout; 
+  //double numerator   = (testing_values - prediction_values).squaredNorm();
+  //double denominator = (
+  //  testing_values - test_mean * VectorXd::Ones(num_holdout)
+  //).squaredNorm(); 
+
+  //loss = std::sqrt(numerator/denominator); // root mean squared.
 
   return true;
 
@@ -585,19 +593,19 @@ void AdaptiveDecisionMaker::WriteCurrentModelResults(const MatrixXd &parameters,
   VectorXd variance = gp_model.variance(parameters);
   VectorXd p_responses = gp_model.value(parameters);
 
-  fprintf(model_data_file, "## Training %04d\n## Loss %16.10e\n", 
-    num_train_calls, loss);
+  fprintf(model_data_file, "## Training epoch %04d\n", num_train_calls);
+  fprintf(model_data_file, "## Loss %16.8e\n", loss);
+  fprintf(model_data_file, "## ");
   for(int i=0; i<num_variables; ++i) {
-    String param_n("Parameter " + std::to_string(i+1));
-    fprintf(model_data_file, "%16s  |  ", param_n.c_str());
+    fprintf(model_data_file, "Parameter %04d  |  ", i+1);
   }
-  fprintf(model_data_file, "%16s  |  %16s  |  %16s\n", "NRMSE", "Prediction", "Uncertainty");
+  fprintf(model_data_file, "NRMSE  |  Prediction  |  Uncertainty\n");
 
   for(int i=0; i<num_points; ++i) {
     for(int j=0; j<num_variables; ++j) {
-      fprintf(model_data_file, "%16.10e", parameters(i,j));
+      fprintf(model_data_file, "%16.8e  ", parameters(i,j));
     }
-    fprintf(model_data_file, "%16.10e%16.10e%16.10e\n", 
+    fprintf(model_data_file, "%16.8e  %16.8e  %16.8e\n", 
       responses(i), p_responses(i), std::sqrt(variance(i)));
   }
   fclose(model_data_file);
