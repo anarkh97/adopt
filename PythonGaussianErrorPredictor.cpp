@@ -38,7 +38,8 @@ using namespace Eigen;
 using namespace dakota::util;
 using namespace dakota::surrogates;
 
-PythonGaussianErrorPredictor::PythonGaussianErrorPredictor(const std::string& module_and_class_name) :
+PythonGaussianErrorPredictor::
+PythonGaussianErrorPredictor(const std::string& module_and_class_name) :
   moduleAndClassName(module_and_class_name),
   ownPython(false),
   pyModuleActive(false)
@@ -47,9 +48,10 @@ PythonGaussianErrorPredictor::PythonGaussianErrorPredictor(const std::string& mo
 }
 
 
-PythonGaussianErrorPredictor::PythonGaussianErrorPredictor(const MatrixXd& samples,
-               const MatrixXd& response,
-               const std::string& module_and_class_name) :
+PythonGaussianErrorPredictor::
+PythonGaussianErrorPredictor(const MatrixXd& samples,
+                             const MatrixXd& response,
+                             const std::string& module_and_class_name) :
   moduleAndClassName(module_and_class_name),
   ownPython(false),
   pyModuleActive(false)
@@ -59,7 +61,8 @@ PythonGaussianErrorPredictor::PythonGaussianErrorPredictor(const MatrixXd& sampl
 }
 
 
-void PythonGaussianErrorPredictor::initialize_python()
+void
+PythonGaussianErrorPredictor::initialize_python()
 {
   // Consider adding meaningful parameters... RWH
   configOptions.set("verbosity", 1, "console output verbosity");
@@ -120,8 +123,9 @@ void PythonGaussianErrorPredictor::initialize_python()
     throw(std::runtime_error("Invalid python module for surrogates"));
 }
 
-void PythonGaussianErrorPredictor::build(const MatrixXd& samples,
-                   const MatrixXd& response)
+void
+PythonGaussianErrorPredictor::build(const MatrixXd& samples,
+                                    const MatrixXd& response)
 {
   assert( pyModuleActive );
   assert( Py_IsInitialized() );
@@ -146,11 +150,16 @@ void PythonGaussianErrorPredictor::build(const MatrixXd& samples,
   isField = (response.cols() > 1);
 }
 
-bool PythonGaussianErrorPredictor::diagnostics_available()
-{ return !isField; }
+bool
+PythonGaussianErrorPredictor::diagnostics_available()
+{
+  return !isField;
+}
 
 
-VectorXd PythonGaussianErrorPredictor::value(const MatrixXd& eval_points) {
+VectorXd
+PythonGaussianErrorPredictor::value(const MatrixXd& eval_points)
+{
 
   assert( pyModuleActive );
   assert( Py_IsInitialized() );
@@ -166,7 +175,9 @@ VectorXd PythonGaussianErrorPredictor::value(const MatrixXd& eval_points) {
 }
 
 
-VectorXd PythonGaussianErrorPredictor::values(const MatrixXd& eval_points) {
+VectorXd
+PythonGaussianErrorPredictor::values(const MatrixXd& eval_points)
+{
 
   assert( pyModuleActive );
   assert( Py_IsInitialized() );
@@ -182,7 +193,9 @@ VectorXd PythonGaussianErrorPredictor::values(const MatrixXd& eval_points) {
 }
 
 
-MatrixXd PythonGaussianErrorPredictor::gradient(const MatrixXd& eval_points) {
+MatrixXd
+PythonGaussianErrorPredictor::gradient(const MatrixXd& eval_points)
+{
   assert( pyModuleActive );
   assert( Py_IsInitialized() );
 
@@ -207,7 +220,9 @@ MatrixXd PythonGaussianErrorPredictor::gradient(const MatrixXd& eval_points) {
 }
 
 
-MatrixXd PythonGaussianErrorPredictor::hessian(const MatrixXd& eval_point) {
+MatrixXd
+PythonGaussianErrorPredictor::hessian(const MatrixXd& eval_point)
+{
 
   assert( pyModuleActive );
   assert( Py_IsInitialized() );
@@ -232,7 +247,9 @@ MatrixXd PythonGaussianErrorPredictor::hessian(const MatrixXd& eval_point) {
   return py_surr_hess(eval_point).cast<MatrixXd>();
 }
 
-VectorXd PythonGaussianErrorPredictor::variance(const MatrixXd& eval_points) {
+VectorXd
+PythonGaussianErrorPredictor::variance(const MatrixXd& eval_points)
+{
 
   assert( pyModuleActive );
   assert( Py_IsInitialized() );
@@ -256,3 +273,55 @@ VectorXd PythonGaussianErrorPredictor::variance(const MatrixXd& eval_points) {
   return vals;
 
 }
+
+double
+PythonGaussianErrorPredictor::loss(const MatrixXd& test_samples,
+                                   const MatrixXd& test_response)
+{
+
+  assert( pyModuleActive );
+  assert( Py_IsInitialized() );
+
+  const std::string fn_name("loss");
+  py::object py_surr_loss;
+  try {
+    py_surr_loss = pySurrogate.attr(fn_name.c_str());
+  }
+  catch(py::error_already_set &e) {
+    if (e.matches(PyExc_AttributeError)) {
+      std::cerr << "Module '" << moduleAndClassName << "' does not "
+        << "contain required method '" << fn_name << "'"
+        << std::endl;
+      throw;
+    }
+  }
+
+  double val = py_surr_loss(test_samples, test_response).cast<double>();
+
+  return val;
+
+}
+
+void
+PythonGaussianErrorPredictor::save_model()
+{
+  assert( pyModuleActive );
+  assert( Py_IsInitialized() );
+
+  const std::string fn_name("save");
+  py::object py_surr_save;
+  try {
+    py_surr_save = pySurrogate.attr(fn_name.c_str());
+  }
+  catch(py::error_already_set &e) {
+    if (e.matches(PyExc_AttributeError)) {
+      std::cerr << "Module '" << moduleAndClassName << "' does not "
+        << "contain required method '" << fn_name << "'"
+        << std::endl;
+      throw;
+    }
+  }
+
+  py_surr_save();
+}
+

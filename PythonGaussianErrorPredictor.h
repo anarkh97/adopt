@@ -19,6 +19,10 @@
  *   - Removed dakota::surrogates namespace
  *   - Added a "variance" function to call the corresponding
  *     "predict_variance" from the python module.
+ *   - Added "save_model" function to call the corresponding 
+ *     "save" from python module. This is different from SurrogaBase 
+ *     save as that function saves the PythonGaussianErrorPredictor
+ *     object and not the underlying surrogate model.
  *
  * Additional Notes:
  *   - Keeping the original comments.
@@ -131,6 +135,11 @@ class PythonGaussianErrorPredictor : public dakota::surrogates::Surrogate {
    * Implemented by AN.
    */
   Eigen::VectorXd variance(const Eigen::MatrixXd& eval_points);
+
+  double loss(const Eigen::MatrixXd& test_samples, const Eigen::MatrixXd& test_response);
+
+  void save_model();
+
 
   std::shared_ptr<dakota::surrogates::Surrogate> clone() const override {
     return std::make_shared<PythonGaussianErrorPredictor>(moduleAndClassName);
