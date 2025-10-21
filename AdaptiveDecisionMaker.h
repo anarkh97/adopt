@@ -1,3 +1,8 @@
+/************************************************************************
+ * Copyright © 2020 The Multiphysics Modeling and Computation (M2C) Lab
+ * <kevin.wgy@gmail.com> <kevinw3@vt.edu>
+ ************************************************************************/
+
 #ifndef _ADAPTIVE_DECISION_MAKER_H_
 #define _ADAPTIVE_DECISION_MAKER_H_
 
@@ -5,7 +10,7 @@
 #include<dakota_global_defs.hpp>
 #include<dakota_data_types.hpp>
 #include<ProblemDescDB.hpp>
-#include<SurrogatesGaussianProcess.hpp>
+#include<PythonGaussianErrorPredictor.h>
 
 // Eigen includes.
 #include<Eigen/Dense>
@@ -31,7 +36,7 @@ class AdaptiveDecisionMaker {
   IntStringMap             id2type; // internal var.
 
   //! Gaussian regression model --- operates on approximation errors.
-  dakota::surrogates::GaussianProcess gp_model;
+  PythonGaussianErrorPredictor gp_model;
 
   //! Neighbor search model --- (AN) currently using naive search
 

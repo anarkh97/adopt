@@ -1,3 +1,8 @@
+/************************************************************************
+ * Copyright © 2020 The Multiphysics Modeling and Computation (M2C) Lab
+ * <kevin.wgy@gmail.com> <kevinw3@vt.edu>
+ ************************************************************************/
+
 #include<algorithm>
 #include<AdaptiveDecisionMaker.h>
 
@@ -35,7 +40,8 @@ double EuclideanDistance(const RealVector &v1, const RealVector &v2)
 
 AdaptiveDecisionMaker::AdaptiveDecisionMaker(const ProblemDescDB &problem_db_)
                      : problem_db(problem_db_), id2var(), id2type(), 
-                       id2error(), ready_to_predict(false), num_train_calls(0)
+                       id2error(), ready_to_predict(false), num_train_calls(0),
+                       gp_model("gaussian_models.dakota_gp")
 {
 
   short dakota_level = problem_db.get_short("method.output");
@@ -58,15 +64,15 @@ AdaptiveDecisionMaker::AdaptiveDecisionMaker(const ProblemDescDB &problem_db_)
       break;
   }
 
-  String options_file = problem_db.get_string("method.advanced_options_file");
+  //String options_file = problem_db.get_string("method.advanced_options_file");
 
   //! Read Gaussian Process options from user specified file.
-  ReadOptionsFile(options_file);
+  //ReadOptionsFile(options_file);
 
   //! NOTE: since we use the default GP constructor, the default
   //! GP options have already been setup. Here we override a few
   //! GP options based on our requirements.
-  LoadGaussianProcesssOptions();
+  //LoadGaussianProcesssOptions();
 
 }
 
@@ -338,7 +344,7 @@ AdaptiveDecisionMaker::NeedToComputeErrors()
 void
 AdaptiveDecisionMaker::LoadGaussianProcesssOptions()
 {
-
+/*
   ParameterList options;
   gp_model.get_options(options);
 
@@ -365,7 +371,7 @@ AdaptiveDecisionMaker::LoadGaussianProcesssOptions()
   options.set("num restarts", 20);
 
   gp_model.set_options(options);
-
+*/
 }
 
 //------------------------------------------------------------------------------
@@ -564,11 +570,11 @@ AdaptiveDecisionMaker::Train()
 
 void AdaptiveDecisionMaker::WriteGaussianProcessModel()
 {
-  //! Temporarily save the model -- will be added as an option later.
-  char full_name[256];
-  sprintf(full_name, "GaussianModel_%04d", num_train_calls);
-  String fname(full_name);
-  GaussianProcess::save(gp_model, fname, false);   
+  ////! Temporarily save the model -- will be added as an option later.
+  //char full_name[256];
+  //sprintf(full_name, "GaussianModel_%04d", num_train_calls);
+  //String fname(full_name);
+  //GaussianProcess::save(gp_model, fname, false);   
 }
 
 //------------------------------------------------------------------------------
