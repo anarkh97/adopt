@@ -3,6 +3,7 @@ import argparse
 from dakota import surrogates as daksurr
 import numpy as np
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error, r2_score
 from typing import Dict, Any
 from numpy.typing import ArrayLike 
 
@@ -62,7 +63,7 @@ class GPSurrogate:
 
     def loss(self, truth : ArrayLike, pred : ArrayLike) -> float:
 
-        loss : float = np.mean((truth - pred)**2)
+        loss : float = mean_squared_error(truth, pred) 
 
         return np.sqrt(loss)
 
@@ -81,10 +82,10 @@ class GPSurrogate:
         num_variables : int = var.shape[1]
 
         resp = resp.flatten()
-        variance : ArrayLike = self.__gp.variance(var)
-        pred_resp : ArrayLike = self.__gp.value(var)
+        variance : ArrayLike = self.predict_variance(var)
+        pred_resp : ArrayLike = self.predict(var)
         uncertainty : ArrayLike = np.sqrt(variance)
-        loss : float = self.loss(var, resp)
+        loss : float = self.loss(resp, pred_resp)
 
         with open(file_name, "w") as file:
             # headers
@@ -171,12 +172,17 @@ if __name__ == "__main__":
         gp_surr.construct(train_var, train_resp)
 
         # Predict
+        train_pred = gp_surr.predict(train_var)
         test_pred = gp_surr.predict(test_var)
 
         # Loss
         loss : float = gp_surr.loss(test_resp, test_pred)
-
         print(f"Loss: {loss:16.8e}")
+
+        # Coefficient of determination
+        cod_train : float = r2_score(train_resp, train_pred)
+        cod_test : float = r2_score(test_resp, test_pred)
+        print(f"Training R2: {cod_train:16.8e} Testing R2: {cod_test:16.8e}")
 
         # Save
         gp_surr.save("GaussianModel") 
