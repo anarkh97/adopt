@@ -41,7 +41,7 @@ double EuclideanDistance(const RealVector &v1, const RealVector &v2)
 AdaptiveDecisionMaker::AdaptiveDecisionMaker(const ProblemDescDB &problem_db_)
                      : problem_db(problem_db_), id2var(), id2type(), 
                        id2error(), ready_to_predict(false), num_train_calls(0),
-                       gp_model("gaussian_models.dakota_gp")
+                       gp_model("gaussian_models.dakota_gp.GPSurrogate")
 {
 
   short dakota_level = problem_db.get_short("method.output");
@@ -434,7 +434,7 @@ AdaptiveDecisionMaker::LoadResponses(const IntRealMap &from,
 bool
 AdaptiveDecisionMaker::BuildGaussianProcessModel(const MatrixXd &samples,
                                                  const VectorXd &values,
-                                                 double &loss,
+                                                 double &testing_loss,
                                                  double split_ratio,
                                                  const size_t seed)
 {
@@ -456,7 +456,7 @@ AdaptiveDecisionMaker::BuildGaussianProcessModel(const MatrixXd &samples,
   if(num_holdout == 0) {
     Cout << "Adaptive SOGA Warning: Insufficient data to create separate "
          << "training and test sets. Waiting till more samples are collected.\n";
-    loss = 1e10; /* sending back a random large value. */
+    testing_loss = 1e10; /* sending back a random large value. */
     return false;
   }
 
@@ -500,16 +500,17 @@ AdaptiveDecisionMaker::BuildGaussianProcessModel(const MatrixXd &samples,
   gp_model.build(training_samples, training_values);
   
   //! test the model
-  loss = gp_model.loss(testing_samples, testing_values);
+  VectorXd training_pred = gp_model.value(training_samples);
+  VectorXd testing_pred = gp_model.value(testing_samples);
 
-  //! calculate standardized loss
-  //double test_mean   = testing_values.sum() / num_holdout; 
-  //double numerator   = (testing_values - prediction_values).squaredNorm();
-  //double denominator = (
-  //  testing_values - test_mean * VectorXd::Ones(num_holdout)
-  //).squaredNorm(); 
+  double training_loss = gp_model.loss(training_values, training_pred);
+  testing_loss = gp_model.loss(testing_values, testing_pred);
 
-  //loss = std::sqrt(numerator/denominator); // root mean squared.
+  // AN: TODO: Output functions should be optional.
+  WriteGaussianProcessModel();
+  // AN: These calculate values again. Use limitedly.
+  WriteCurrentModelResults(training_samples, training_values, training_loss, "train");
+  WriteCurrentModelResults(testing_samples, testing_values, testing_loss, "test");
 
   return true;
 
@@ -557,64 +558,60 @@ AdaptiveDecisionMaker::Train()
            << "to predict.\n";
   }
 
-  gp_model.save_model();   
-
-  //WriteGaussianProcessModel();
-  //WriteCurrentModelResults(parameters, responses, loss);
-
 }
 
 //------------------------------------------------------------------------------
 
-//void
-//AdaptiveDecisionMaker::WriteGaussianProcessModel()
-//{
-//  //! Temporarily save the model -- will be added as an option later.
-//  char full_name[256];
-//  sprintf(full_name, "GaussianModel_%04d", num_train_calls);
-//  String fname(full_name);
-//  GaussianProcess::save(gp_model, fname, false);   
-//}
+void
+AdaptiveDecisionMaker::WriteGaussianProcessModel()
+{
+  //! Temporarily save the model -- will be added as an option later.
+  char full_name[256];
+  sprintf(full_name, "PredictionModel_%04d", num_train_calls);
+  String fname(full_name);
+  gp_model.save_model(fname);
+}
 
 //------------------------------------------------------------------------------
 
-//void AdaptiveDecisionMaker::WriteCurrentModelResults(const MatrixXd &parameters,
-//                                                     const VectorXd &responses,
-//                                                     const double loss)
-//{
-//  //! Output data for plotting/debugging
-//  char full_name[256];
-//  sprintf(full_name, "GaussianModel_%04d_data.txt", num_train_calls);
-//  FILE *model_data_file = fopen(full_name, "w");
-//  if(!model_data_file) {
-//    Cerr << "Adaptive SOGA Error: Could not open the file "
-//         << "\"" << String(full_name) << "\".\n";
-//    abort_handler(METHOD_ERROR);
-//  }
-//
-//  int num_variables = parameters.cols();
-//  int num_points    = parameters.rows();
-//
-//  VectorXd variance = gp_model.variance(parameters);
-//  VectorXd p_responses = gp_model.value(parameters);
-//
-//  fprintf(model_data_file, "## Training epoch %04d\n", num_train_calls);
-//  fprintf(model_data_file, "## Loss %16.8e\n", loss);
-//  fprintf(model_data_file, "## ");
-//  for(int i=0; i<num_variables; ++i) {
-//    fprintf(model_data_file, "Parameter %04d  |  ", i+1);
-//  }
-//  fprintf(model_data_file, "NRMSE  |  Prediction  |  Uncertainty\n");
-//
-//  for(int i=0; i<num_points; ++i) {
-//    for(int j=0; j<num_variables; ++j) {
-//      fprintf(model_data_file, "%16.8e  ", parameters(i,j));
-//    }
-//    fprintf(model_data_file, "%16.8e  %16.8e  %16.8e\n", 
-//      responses(i), p_responses(i), std::sqrt(variance(i)));
-//  }
-//  fclose(model_data_file);
-//}
+void AdaptiveDecisionMaker::WriteCurrentModelResults(const MatrixXd &parameters,
+                                                     const VectorXd &responses,
+                                                     const double loss,
+                                                     const String &suffix)
+{
+  //! Output data for plotting/debugging
+  char full_name[256];
+  sprintf(full_name, "PredictionModel_%04d_%s_data.txt", num_train_calls, suffix.c_str());
+  FILE *model_data_file = fopen(full_name, "w");
+  if(!model_data_file) {
+    Cerr << "Adaptive SOGA Error: Could not open the file "
+         << "\"" << String(full_name) << "\".\n";
+    abort_handler(METHOD_ERROR);
+  }
+
+  int num_variables = parameters.cols();
+  int num_points    = parameters.rows();
+
+  VectorXd variance = gp_model.variance(parameters);
+  VectorXd p_responses = gp_model.value(parameters);
+
+  fprintf(model_data_file, "## Training epoch %04d\n", num_train_calls);
+  fprintf(model_data_file, "## Loss %16.8e\n", loss);
+  fprintf(model_data_file, "## ");
+  for(int i=0; i<num_variables; ++i) {
+    fprintf(model_data_file, "Parameter %04d  |  ", i+1);
+  }
+  fprintf(model_data_file, "NRMSE  |  Prediction  |  Uncertainty\n");
+
+  for(int i=0; i<num_points; ++i) {
+    for(int j=0; j<num_variables; ++j) {
+      fprintf(model_data_file, "%16.8e  ", parameters(i,j));
+    }
+    fprintf(model_data_file, "%16.8e  %16.8e  %16.8e\n", 
+      responses(i), p_responses(i), std::sqrt(variance(i)));
+  }
+  fclose(model_data_file);
+}
 
 //------------------------------------------------------------------------------
 

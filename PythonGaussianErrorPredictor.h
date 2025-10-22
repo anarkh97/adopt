@@ -136,9 +136,9 @@ class PythonGaussianErrorPredictor : public dakota::surrogates::Surrogate {
    */
   Eigen::VectorXd variance(const Eigen::MatrixXd& eval_points);
 
-  double loss(const Eigen::MatrixXd& test_samples, const Eigen::MatrixXd& test_response);
+  double loss(const Eigen::MatrixXd& truth, const Eigen::MatrixXd& pred);
 
-  void save_model();
+  void save_model(const std::string& filename);
 
 
   std::shared_ptr<dakota::surrogates::Surrogate> clone() const override {

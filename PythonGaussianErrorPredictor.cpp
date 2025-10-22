@@ -276,8 +276,8 @@ PythonGaussianErrorPredictor::variance(const MatrixXd& eval_points)
 }
 
 double
-PythonGaussianErrorPredictor::loss(const MatrixXd& test_samples,
-                                   const MatrixXd& test_response)
+PythonGaussianErrorPredictor::loss(const MatrixXd& truth,
+                                   const MatrixXd& pred)
 {
 
   assert( pyModuleActive );
@@ -297,14 +297,14 @@ PythonGaussianErrorPredictor::loss(const MatrixXd& test_samples,
     }
   }
 
-  double val = py_surr_loss(test_samples, test_response).cast<double>();
+  double val = py_surr_loss(truth, pred).cast<double>();
 
   return val;
 
 }
 
 void
-PythonGaussianErrorPredictor::save_model()
+PythonGaussianErrorPredictor::save_model(const std::string& filename)
 {
   assert( pyModuleActive );
   assert( Py_IsInitialized() );
@@ -323,6 +323,6 @@ PythonGaussianErrorPredictor::save_model()
     }
   }
 
-  py_surr_save();
+  py_surr_save(filename);
 }
 

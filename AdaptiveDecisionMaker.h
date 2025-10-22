@@ -104,11 +104,12 @@ private:
   void LoadResponses(const Dakota::IntRealMap& from, 
                      Eigen::VectorXd& into) const;
 
-  //! Output functions --- AN: now left to the python module
-  //void WriteGaussianProcessModel();
-  //void WriteCurrentModelResults(const Eigen::MatrixXd &parameters,
-  //                              const Eigen::VectorXd &responses,
-  //                              const double loss);
+  //! Output functions
+  void WriteGaussianProcessModel();
+  void WriteCurrentModelResults(const Eigen::MatrixXd &parameters,
+                                const Eigen::VectorXd &responses,
+                                const double loss,
+                                const Dakota::String &filename);
 
 };
 
