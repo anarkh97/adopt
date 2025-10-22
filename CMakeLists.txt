@@ -36,7 +36,7 @@ set(Dakota_BUILD_TREE
     ON CACHE BOOL "Enable Dakota build tree model")
 
 set(Dakota_DIR 
-    "$ENV{DAK_BUILD}/install/lib/cmake/Dakota/" 
+        "$ENV{DAK_INSTALL}/lib/cmake/Dakota/" 
     CACHE PATH "Path to the Dakota configuration directory.")
 find_package(Dakota REQUIRED PATHS ${Dakota_DIR} NO_DEFAULT_PATH)
 
