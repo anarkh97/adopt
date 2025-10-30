@@ -239,8 +239,8 @@ AdaptiveDecisionMaker::GetEvaluationType(const RealVector &cont_vars,
   
   double standard_dev = std::sqrt(query_variance(0));
 
-  if(3*standard_dev < 1e-2) { // check if 99.7% CI is narrow 
-    into = (query_prediction(0) < 1.3e-2) ? "APPROX" : "TRUE";
+  if(3*standard_dev < 6e-5 /*1e-2*/) { // check if 99.7% CI is narrow 
+    into = (query_prediction(0) < 5e-5 /*1.3e-2*/) ? "APPROX" : "TRUE";
   }
 
   if(verbose>1) { 
@@ -355,6 +355,8 @@ AdaptiveDecisionMaker::LoadGaussianProcesssOptions()
 
   //! polynomial trend options.
   options.sublist("Trend").set("estimate trend", true);
+  options.sublist("Trend").sublist("Options").set("max degree", 0);
+  options.sublist("Trend").sublist("Options").set("p-norm", 2.0);
 
   //! nugget options.
   options.sublist("Nugget").set("estimate nugget", true);
@@ -547,7 +549,7 @@ AdaptiveDecisionMaker::Train()
   }
 
   //! Switch the GP model on once loss is below a threshold.
-  if(loss < 5e-2) { 
+  if(loss < 5e-5/*5e-2*/) { 
     ready_to_predict = true;
 
     if(verbose>0)
@@ -568,7 +570,7 @@ void AdaptiveDecisionMaker::WriteGaussianProcessModel()
   char full_name[256];
   sprintf(full_name, "GaussianModel_%04d", num_train_calls);
   String fname(full_name);
-  GaussianProcess::save(gp_model, fname, false);   
+  GaussianProcess::save(gp_model, fname, true);   
 }
 
 //------------------------------------------------------------------------------

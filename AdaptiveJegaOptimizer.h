@@ -31,6 +31,8 @@ class AdaptiveJegaOptimizer : public Dakota::Optimizer {
   std::shared_ptr<JegaEvaluatorCreator> eval_creator;
   std::shared_ptr<AdaptiveDecisionMaker> decision_maker;
 
+  Dakota::VariablesArray _initPts;
+ 
 public:
 
   //! Default constructor
@@ -56,6 +58,8 @@ private:
   void LoadDesignVariables(JEGA::FrontEnd::ProblemConfig& config);
   void LoadObjectiveFunctions(JEGA::FrontEnd::ProblemConfig& config);
   void LoadConstraints(JEGA::FrontEnd::ProblemConfig& config);
+
+  JEGA::DoubleMatrix ToDoubleMatrix(const Dakota::VariablesArray& variables) const;
 
   //! Dakota related methods
   //! MOGA functionality has been removed for now.
@@ -94,6 +98,12 @@ public:
 
   //! Return the flag indicating whether method supports continuous variables
   bool supports_continuous_variables() override { return true; }
+
+  //! Return the flag indicating whether method supports linear equalities
+  bool supports_linear_equality() override { return true; }
+
+  //! Return the flag indicating whether method supports linear inequalities
+  bool supports_linear_inequality() override { return true; }
 
   //! Return the flag indicating whether method supports nonlinear equality constrinats
   bool supports_nonlinear_equality() override { return true; }

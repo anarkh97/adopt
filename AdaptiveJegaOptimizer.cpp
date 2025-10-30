@@ -190,6 +190,61 @@ AdaptiveJegaOptimizer::core_run()
   // of whether or not logging b/c it is used in a fatal error.
   const string& name = ga_algorithm->GetName();
 
+
+  // The initializer requires some additional logic to account for the
+  // possibility that JEGA is being used in a Dakota strategy.  If that is
+  // the case, the _initPts array will be non-empty and we will use them
+  // instead of whatever initialization has been specified by the user.
+  if(!this->_initPts.empty())
+  {
+      const GeneticAlgorithmInitializer& oldInit =
+          ga_algorithm->GetOperatorSet().GetInitializer();
+
+      JEGALOG_II_G(lquiet(), this,
+          text_entry(lquiet(), name + ": discovered multiple initial "
+              "points presumably supplied by a previous iterator in a "
+              "strategy.  The \"" + oldInit.GetName() + "\" initializer "
+              "will not be used and instead will be replaced with the "
+              "double_matrix initializer which will read the supplied "
+              "initial points."
+              )
+          )
+
+      pdb.AddIntegralParam(
+          "method.population_size", static_cast<int>(oldInit.GetSize())
+          );
+
+      pdb.AddDoubleMatrixParam(
+          "method.jega.design_matrix", ToDoubleMatrix(initial_points())
+          );
+
+      GeneticAlgorithmInitializer* newInit =
+          AllOperators::FullInstance().GetInitializer(
+              "double_matrix", *ga_algorithm
+              );
+
+      JEGAIFLOG_II_G_F(newInit == 0x0, this,
+          text_entry(lfatal(), name + ": Unable to resolve "
+              "Initializer \"double_matrix\".")
+          );
+
+      JEGAIFLOG_II_F(!ga_algorithm->SetInitializer(newInit),
+          ga_algorithm->GetLogger(), this,
+          text_entry(lfatal(), name + ": Unable to set the initializer to "
+              "double_matrix because it is incompatible with the other "
+              "operators."
+              )
+          )
+
+      JEGAIFLOG_II_F(
+          !newInit->ExtractParameters(pdb), ga_algorithm->GetLogger(), this,
+          text_entry(lfatal(),
+              name + ": Failed to retrieve the parameters for \"" +
+              newInit->GetName() + "\".")
+          );
+
+  }
+
   JEGALOG_II_G(lverbose(), this, text_entry(lverbose(), name + 
                ": About to perform algorithm execution."))
 
@@ -244,6 +299,38 @@ AdaptiveJegaOptimizer::core_run()
   // We can not destroy our GA --- Let JEGA handle this
   driver.DestroyAlgorithm(ga_algorithm);
 
+}
+
+//-----------------------------------------------------------------------------
+
+JEGA::DoubleMatrix
+AdaptiveJegaOptimizer::ToDoubleMatrix(const VariablesArray& variables) const
+{
+    EDDY_FUNC_DEBUGSCOPE
+
+    // Prepare the resultant matrix with proper initial capacity
+    JEGA::DoubleMatrix ret(variables.size());
+
+    // Iterate the variables objects and create entries in the new matrix
+    size_t i = 0;
+    for(VariablesArray::const_iterator it(variables.begin());
+        it!=variables.end(); ++it, ++i)
+    {
+        // Store the continuous and discrete variables arrays for use below.
+        const RealVector& cvs  = (*it).continuous_variables();
+        const IntVector&  divs = (*it).discrete_int_variables();
+        const RealVector& drvs = (*it).discrete_real_variables();
+
+        // Prepare the row we are working with to hold all variable values.
+        ret[i].reserve(cvs.length() + divs.length() + drvs.length());
+
+        // Copy in first the continuous followed by the discrete values.
+        ret[i].insert(ret[i].end(), cvs.values(), cvs.values()+cvs.length());
+        ret[i].insert(ret[i].end(), divs.values(), divs.values()+divs.length());
+        ret[i].insert(ret[i].end(), drvs.values(), drvs.values()+drvs.length());
+    }
+
+    return ret;
 }
 
 //-----------------------------------------------------------------------------

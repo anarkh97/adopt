@@ -30,6 +30,9 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 # -----------------------------
 # External packages required.
 
+# pybind11 is required when Dakota is build with Python surrogates
+find_package(pybind11 REQUIRED)
+
 # Temporary workaround: Dakota's build tree 
 # option is currently not functioning as expected.
 set(Dakota_BUILD_TREE
