@@ -239,8 +239,9 @@ AdaptiveDecisionMaker::GetEvaluationType(const RealVector &cont_vars,
   
   double standard_dev = std::sqrt(query_variance(0));
 
-  if(3*standard_dev < 6e-5 /*1e-2*/) { // check if 99.7% CI is narrow 
-    into = (query_prediction(0) < 5e-5 /*1.3e-2*/) ? "APPROX" : "TRUE";
+  if(3*standard_dev <= 1e-2 /*6.5e-3*/ // 99.7% CI 
+     && query_prediction(0) <= 1.3e-2 /*5e-2*/) { 
+    into = "APPROX";
   }
 
   if(verbose>1) { 
@@ -355,7 +356,7 @@ AdaptiveDecisionMaker::LoadGaussianProcesssOptions()
 
   //! polynomial trend options.
   options.sublist("Trend").set("estimate trend", true);
-  options.sublist("Trend").sublist("Options").set("max degree", 0);
+  options.sublist("Trend").sublist("Options").set("max degree", 1);
   options.sublist("Trend").sublist("Options").set("p-norm", 2.0);
 
   //! nugget options.
@@ -437,70 +438,73 @@ AdaptiveDecisionMaker::BuildGaussianProcessModel(const MatrixXd &samples,
 
   assert(samples.rows() == values.rows());
 
-  if(split_ratio == 0 and verbose>0)  {
-    Cout << "Adaptive SOGA Warning: Train/Test split ratio not provided. "
-         << "Using default (20%).\n";
-    split_ratio = 0.2;
-  }
-
-  //! split data set into training and testing sets.
-  int var_dim     = samples.cols();
-  int num_samples = samples.rows();
-  int num_holdout = (int)(num_samples*split_ratio);
-  int num_train   = num_samples - num_holdout;
-
-  if(num_holdout == 0) {
-    Cout << "Adaptive SOGA Warning: Insufficient data to create separate "
-         << "training and test sets. Waiting till more samples are collected.\n";
-    loss = 1e10; /* sending back a random large value. */
-    return false;
-  }
-
-  MatrixXd training_samples(num_train, var_dim);
-  VectorXd training_values(num_train);
-  MatrixXd testing_samples(num_holdout, var_dim);
-  VectorXd testing_values(num_holdout);
-
-  VectorXi index_permutations = 
-    VectorXi::LinSpaced(num_samples, 0, num_samples-1);
-
-  //! randomize indices (using dakota's random_permutation)
-  if(seed == 0) 
-    random_permutation(num_samples, (unsigned int)std::time(0), 
-                       index_permutations);
-  else
-    random_permutation(num_samples, (unsigned int)seed, 
-                       index_permutations);
-
-  int train_index = 0;
-  int test_index = 0;
-  for(int i=0; i<num_samples; ++i) {
-
-    //! first "num_train" samples are used for training.
-    if(i < num_train) {
-      int samples_index = index_permutations(i);
-      training_samples.row(train_index) = samples.row(samples_index);
-      training_values(train_index, 0) = values(samples_index, 0);
-      train_index++;
-    }
-    //! next populate test set.
-    else {
-      int samples_index = index_permutations(i);
-      testing_samples.row(test_index) = samples.row(samples_index);
-      testing_values(test_index, 0) = values(samples_index, 0);
-      test_index++;
-    }
-  }
-  
   //! build the model
-  gp_model.build(training_samples, training_values);
-  
-  //! test the model
-  VectorXd prediction_values = gp_model.value(testing_samples);
+  gp_model.build(samples, values);
 
-  //! calculate loss (root mean squared loss)
-  loss = (prediction_values - testing_values).squaredNorm();
-  loss = std::sqrt(loss/num_holdout);
+  //if(split_ratio == 0 and verbose>0)  {
+  //  Cout << "Adaptive SOGA Warning: Train/Test split ratio not provided. "
+  //       << "Using default (20%).\n";
+  //  split_ratio = 0.2;
+  //}
+
+  ////! split data set into training and testing sets.
+  //int var_dim     = samples.cols();
+  //int num_samples = samples.rows();
+  //int num_holdout = (int)(num_samples*split_ratio);
+  //int num_train   = num_samples - num_holdout;
+
+  //if(num_holdout == 0) {
+  //  Cout << "Adaptive SOGA Warning: Insufficient data to create separate "
+  //       << "training and test sets. Waiting till more samples are collected.\n";
+  //  loss = 1e10; /* sending back a random large value. */
+  //  return false;
+  //}
+
+  //MatrixXd training_samples(num_train, var_dim);
+  //VectorXd training_values(num_train);
+  //MatrixXd testing_samples(num_holdout, var_dim);
+  //VectorXd testing_values(num_holdout);
+
+  //VectorXi index_permutations = 
+  //  VectorXi::LinSpaced(num_samples, 0, num_samples-1);
+
+  ////! randomize indices (using dakota's random_permutation)
+  //if(seed == 0) 
+  //  random_permutation(num_samples, (unsigned int)std::time(0), 
+  //                     index_permutations);
+  //else
+  //  random_permutation(num_samples, (unsigned int)seed, 
+  //                     index_permutations);
+
+  //int train_index = 0;
+  //int test_index = 0;
+  //for(int i=0; i<num_samples; ++i) {
+
+  //  //! first "num_train" samples are used for training.
+  //  if(i < num_train) {
+  //    int samples_index = index_permutations(i);
+  //    training_samples.row(train_index) = samples.row(samples_index);
+  //    training_values(train_index, 0) = values(samples_index, 0);
+  //    train_index++;
+  //  }
+  //  //! next populate test set.
+  //  else {
+  //    int samples_index = index_permutations(i);
+  //    testing_samples.row(test_index) = samples.row(samples_index);
+  //    testing_values(test_index, 0) = values(samples_index, 0);
+  //    test_index++;
+  //  }
+  //}
+  //
+  ////! build the model
+  //gp_model.build(training_samples, training_values);
+  
+  ////! test the model
+  //VectorXd prediction_values = gp_model.value(testing_samples);
+
+  ////! calculate loss (root mean squared loss)
+  //loss = (prediction_values - testing_values).squaredNorm();
+  //loss = std::sqrt(loss/num_holdout);
 
   //! calculate standardized loss
   //double test_mean   = testing_values.sum() / num_holdout; 
@@ -541,21 +545,23 @@ AdaptiveDecisionMaker::Train()
   LoadParameters(id2var, parameters);
   LoadResponses(id2error, responses);
 
-  //! Return when the database is too small (i.e., build failed).
+  ////! Return when the database is too small (i.e., build failed).
   double loss = 0.0;
   if(!BuildGaussianProcessModel(parameters, responses, loss)) {
     ready_to_predict = false;
     return;
   }
 
-  //! Switch the GP model on once loss is below a threshold.
-  if(loss < 5e-5/*5e-2*/) { 
-    ready_to_predict = true;
+  ready_to_predict = true;
 
-    if(verbose>0)
-      Cout << "Adaptive SOGA: Gaussian Process Regression model is ready "
-           << "to predict.\n";
-  }
+  ////! Switch the GP model on once loss is below a threshold.
+  //if(loss < 5e-3) { // /*5e-2) { 
+  //  ready_to_predict = true;
+
+  //  if(verbose>0)
+  //    Cout << "Adaptive SOGA: Gaussian Process Regression model is ready "
+  //         << "to predict.\n";
+  //}
 
   WriteGaussianProcessModel();
   WriteCurrentModelResults(parameters, responses, loss);

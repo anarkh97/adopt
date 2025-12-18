@@ -44,13 +44,15 @@ public:
     return JEGA::FrontEnd::Driver::ExtractAllData(config);
   }
 
+  static JEGA::Utilities::DesignOFSortSet
+  DeepDuplicate(const JEGA::Utilities::DesignOFSortSet& from,
+                bool move_tags = true) {
+    return JEGA::FrontEnd::Driver::DeepDuplicate(from, move_tags);
+  }
+
   void DestroyAlgorithm(JEGA::Algorithms::GeneticAlgorithm *ga) {
     JEGA::FrontEnd::Driver::DestroyAlgorithm(ga);
   }
-
-  //! Custom implementations of JEGA::FrontEnd::Driver functions
-  JEGA::Utilities::DesignOFSortSet 
-  PerformIterations(JEGA::Algorithms::GeneticAlgorithm* ga);
 
 };
 

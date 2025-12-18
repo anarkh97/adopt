@@ -285,12 +285,164 @@ JegaEvaluator::RecordErrorInDecisionMaker(const int id, /* evaluation id from tr
 //-----------------------------------------------------------------------------
 
 bool
-JegaEvaluator::RunErrorModel()
+JegaEvaluator::Evaluate(DesignGroup &group)
 {
-  EDDY_FUNC_DEBUGSCOPE
 
-  bool ret = decision_maker.NeedToComputeErrors();
+  //---------------------------------------------------------------------------
+  // Prepare containers 
+  //---------------------------------------------------------------------------
+  RealVector       continuous_variables;
+  IntVector        state_int_vars;
+  StringMultiArray state_string_vars; // "ERROR", "APPROX", "TRUE"
+
+  //---------------------------------------------------------------------------
+  // Split group into "True" and "Approx" evaluations 
+  //---------------------------------------------------------------------------
+  size_t initial_size = 100;
+  DesignTarget &target = group.GetDesignTarget();
+  vector<Design*> tr_designs(initial_size, 0x0); // true evaluations
+  vector<Design*> ap_designs(initial_size, 0x0); // approx evaluations
+
+  // prepare to iterate over the group
+  DesignDVSortSet::const_iterator it(group.BeginDV());
+  const DesignDVSortSet::const_iterator e(group.EndDV());
+
+  size_t tr_des_size = 0;
+  size_t ap_des_size = 0;
+  for(; it!=e; ++it) {
+
+    SeparateVariables(**it, continuous_variables);
+    SetStateVariables(continuous_variables, state_int_vars, state_string_vars);
+    
+    const String switch_val = state_string_vars[switch_label_idx];
+
+    if(switch_val == "TRUE") {
+      if(tr_des_size >= tr_designs.size()) 
+        tr_designs.resize(tr_designs.size() + initial_size, 0x0);
+
+      tr_designs[tr_des_size] = *it;
+      tr_des_size++;
+    }
+    else if(switch_val == "APPROX") {
+      if(ap_des_size >= ap_designs.size()) 
+        ap_designs.resize(ap_designs.size() + initial_size, 0x0);
+
+      ap_designs[ap_des_size] = *it;
+      ap_des_size++;
+    }
+    else {
+      JEGALOG_II_G_F(this, text_entry(lfatal(), "Adaptive JEGA Error: "
+                     "Something is wrong. Found an incorrect \"SWITCH\" value.\n"))
+    }
+
+  }
+  tr_designs.resize(tr_des_size);
+  ap_designs.resize(ap_des_size);
+  
+  //---------------------------------------------------------------------------
+  // Run the evaluations 
+  //---------------------------------------------------------------------------
+  DesignGroup t_group(target, tr_designs);
+  DesignGroup a_group(target, ap_designs);
+
+  // "True" evaluations undertaken first for efficient use of resources
+  bool t_ret = EvaluationLoop(t_group);
+  bool a_ret = EvaluationLoop(a_group);
+
+  bool ret = t_ret && a_ret;
+
   return ret;
+
+}
+
+//-----------------------------------------------------------------------------
+
+void
+JegaEvaluator::ErrorEvaluationLoop()
+{
+
+  //---------------------------------------------------------------------------
+  // Prepare containers 
+  //---------------------------------------------------------------------------
+  RealVector       continuous_variables;
+  IntVector        state_int_vars;
+  StringMultiArray state_string_vars; // "ERROR", "APPROX", "TRUE"
+
+  //---------------------------------------------------------------------------
+  // Run the "error" evaluations and perform model training
+  //---------------------------------------------------------------------------
+
+  IntRealVectorMap::const_iterator tr_it(
+    decision_maker.GetBeginForTrueDatabase());
+  const IntRealVectorMap::const_iterator tr_e(
+    decision_maker.GetEndForTrueDatabase());
+
+  JEGALOG_II(GetLogger(), ldebug(), this,
+    text_entry(ldebug(), GetName() + ": Performing group error evaluation."))
+
+  for(; tr_it!=tr_e; ++tr_it) {
+
+    // first, set the current values of the variables in the model
+    ModelUtils::continuous_variables(error_model, tr_it->second);
+    
+    //========================================================================
+    // Pass error flag to analysis driver.
+    //========================================================================
+    SetStateVariables(tr_it->second, state_int_vars, state_string_vars, true); 
+    ModelUtils::inactive_discrete_int_variables(error_model, state_int_vars);
+    const size_t idsv_len = state_string_vars.num_elements();
+    StringMultiArrayConstView idsv_view = state_string_vars[
+      boost::indices[idx_range(0,idsv_len)]];
+    ModelUtils::inactive_discrete_string_variables(error_model, idsv_view);
+
+    // now request the evaluation in synchronous or asyncronous mode.
+    if(error_model.asynch_flag()) 
+      error_model.evaluate_nowait();
+    else {
+      // The following method call will use the default
+      // Active set vector which is to just compute
+      // function values, no gradients or hessians.
+      error_model.evaluate();
+
+      // Record the error responses from metadata
+      const RealVector &rsp_values =
+        error_model.current_response().function_values();
+
+	    // Error response should not be sent to JEGA.
+      RecordErrorInDecisionMaker(tr_it->first, rsp_values, tr_it->second);
+    }
+
+  }
+
+  if(error_model.asynch_flag()) {
+    // Wait for the responses.
+    const IntResponseMap& response_map = error_model.synchronize();
+    size_t num_resp = response_map.size();
+
+    EDDY_ASSERT(num_resp == num_eval_reqs);
+
+    // prepare to access the elements of the response_map by iterator.
+    IntRespMCIter r_cit = response_map.begin();
+
+    // Record the set of responses in the DesignGroup
+    for(tr_it=decision_maker.GetBeginForTrueDatabase(); 
+        tr_it!=tr_e; ++tr_it) {
+      // Error response should not be sent to JEGA
+      const std::vector<RespMetadataT>& mtd_vals =
+        r_cit->second.metadata();
+      const StringArray& mtd_labels = 
+        r_cit->second.shared_data().metadata_labels();
+
+      const RealVector &rsp_values =
+        r_cit->second.function_values();
+
+      RecordErrorInDecisionMaker(tr_it->first, rsp_values, tr_it->second);
+
+      //increment
+      ++r_cit;
+    }
+  }
+
 }
 
 //-----------------------------------------------------------------------------
@@ -298,18 +450,24 @@ JegaEvaluator::RunErrorModel()
 //! Performs design evaluations using the model interface.
 //! Refactored from JEGAOptimizer::Evaluator::Evaluate
 bool
-JegaEvaluator::Evaluate(DesignGroup &group)
+JegaEvaluator::EvaluationLoop(DesignGroup &group)
 {
   EDDY_FUNC_DEBUGSCOPE
 
   JEGALOG_II(GetLogger(), ldebug(), this,
     text_entry(ldebug(), GetName() + ": Performing group evaluation."))
 
-  // check for trivial abort conditions
+  //---------------------------------------------------------------------------
+  // Handle trivial cases
+  //---------------------------------------------------------------------------
   if(group.IsEmpty()) return true;
 
   // first, let's see if we can avoid any evaluations.
   ResolveClones(group);
+
+  //---------------------------------------------------------------------------
+  // Prepare to evaluate
+  //---------------------------------------------------------------------------
 
   // we'll prepare containers for repeated use without re-construction
   RealVector       continuous_variables;
@@ -322,10 +480,6 @@ JegaEvaluator::Evaluate(DesignGroup &group)
   // arrays/vectors for adaptive decision model
   IntVector        state_int_vars;
   StringMultiArray state_string_vars; // "ERROR", "APPROX", "TRUE"
-
-  // prepare to iterate over the group
-  DesignDVSortSet::const_iterator it(group.BeginDV());
-  const DesignDVSortSet::const_iterator e(group.EndDV());
 
   // these quantities will be used below
   const DesignTarget& target = GetDesignTarget();
@@ -343,10 +497,15 @@ JegaEvaluator::Evaluate(DesignGroup &group)
   const eddy::utilities::uint64_t prior_reqs = GetNumberEvaluations();
   eddy::utilities::uint64_t num_eval_reqs = 0;
 
+  //---------------------------------------------------------------------------
+  // Iterate over all designs
+  //---------------------------------------------------------------------------
+  // prepare to iterate over the group
+  DesignDVSortSet::const_iterator it(group.BeginDV());
+  const DesignDVSortSet::const_iterator e(group.EndDV());
+
   // store an iterator to the first linear constraint so that
   // we can evaluate it using the cinfo objects.
-
-  // prepare to iterate
   ConstraintInfoVector::const_iterator flincn(cninfos.begin() + num_nonlin_cn);
   ConstraintInfoVector::const_iterator cit;
 
@@ -496,113 +655,6 @@ JegaEvaluator::Evaluate(DesignGroup &group)
       // only increment for newly evaluated points contained in response_map
       ++r_cit;
     }
-  }
-
-  // Now get the error estimate at each true evaluation using the error_model
-  // Only run error_model when sim_model was successfull. Otherwise, we let
-  // the code to fall through back to Dakota for printing errors messages.
-  if(ret and RunErrorModel()) {
-
-    // Now we go over all true designs and map errors.
-    IntRealVectorMap::const_iterator tr_it(
-      decision_maker.GetBeginForTrueDatabase());
-    const IntRealVectorMap::const_iterator tr_e(
-      decision_maker.GetEndForTrueDatabase());
-
-    JEGALOG_II(GetLogger(), ldebug(), this,
-      text_entry(ldebug(), GetName() + ": Performing group error evaluation."))
-
-    for(; tr_it!=tr_e; ++tr_it) {
-
-      // Note: We assume that the designs have already been evaluated. Furthermore, 
-      // we do not check whether the function evaluation limit has been exceeded, 
-      // since error evaluations are considered auxiliary and should not contribute
-      //  to the user-specified maximum function evaluation count.
-    
-      // send this guy out for evaluation using the "error_model"
-
-      // first, set the current values of the variables in the model
-      ModelUtils::continuous_variables(error_model, tr_it->second);
-      //ModelUtils::discrete_int_variables(error_model, disc_int_vars);
-      //ModelUtils::discrete_real_variables(error_model, disc_real_vars);
-      //// Strings set by calling single value setter for each
-      ////for (size_t i=0; i<disc_string_vars.num_elements(); ++i)
-      ////  ModelUtils::discrete_string_variable(sim_model, disc_string_vars[i],i);
-      //// Could use discrete_string_varables to avoid overhead of repeated 
-      //// function calls, but it takes a StringMultiArrayConstView, which
-      //// must be created from disc_string_vars. Maybe there's a simpler way,
-      //// but...
-      //// const size_t &dsv_len = disc_string_vars.num_elements();
-      //// StringMultiArrayConstView dsv_view = disc_string_vars[ 
-      ////   boost::indices[idx_range(0,dsv_len)]];
-      //// ModelUtils::discrete_string_variables(this->_model, dsv_view);
-      
-      //========================================================================
-      // Pass error flag to analysis driver.
-      //========================================================================
-      SetStateVariables(tr_it->second, state_int_vars, state_string_vars, true); 
-      ModelUtils::inactive_discrete_int_variables(error_model, state_int_vars);
-      const size_t idsv_len = state_string_vars.num_elements();
-      StringMultiArrayConstView idsv_view = state_string_vars[
-        boost::indices[idx_range(0,idsv_len)]];
-      ModelUtils::inactive_discrete_string_variables(error_model, idsv_view);
-
-      // now request the evaluation in synchronous or asyncronous mode.
-      if(error_model.asynch_flag()) 
-        error_model.evaluate_nowait();
-      else {
-        // The following method call will use the default
-        // Active set vector which is to just compute
-        // function values, no gradients or hessians.
-        error_model.evaluate();
-
-        // Record the error responses from metadata
-        const RealVector &rsp_values =
-          error_model.current_response().function_values();
-
-	      // Error response should not be sent to JEGA.
-        RecordErrorInDecisionMaker(tr_it->first, rsp_values, tr_it->second);
-      }
-
-    }
-
-    // If we did our evaluations asynchronously, we did not yet record
-    // the results (because they were not available).  We need to do so
-    // now.  The call to error_model.synchronize causes the program to block
-    // until all the results are available.  We can then record the
-    // responses in the same fashion as above.  Note that the linear
-    // constraints have already been computed!!
-    if(error_model.asynch_flag()) {
-      // Wait for the responses.
-      const IntResponseMap& response_map = error_model.synchronize();
-      size_t num_resp = response_map.size();
-
-      EDDY_ASSERT(num_resp == num_eval_reqs);
-
-      // prepare to access the elements of the response_map by iterator.
-      IntRespMCIter r_cit = response_map.begin();
-
-      // Record the set of responses in the DesignGroup
-      for(tr_it=decision_maker.GetBeginForTrueDatabase(); 
-          tr_it!=tr_e; ++tr_it) {
-        // Error response should not be sent to JEGA
-        const std::vector<RespMetadataT>& mtd_vals =
-          r_cit->second.metadata();
-        const StringArray& mtd_labels = 
-          r_cit->second.shared_data().metadata_labels();
-
-        const RealVector &rsp_values =
-          r_cit->second.function_values();
-
-        RecordErrorInDecisionMaker(tr_it->first, rsp_values, tr_it->second);
-
-        //increment
-        ++r_cit;
-      }
-    }
-
-    decision_maker.Train();
-
   }
 
   return ret;

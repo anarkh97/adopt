@@ -85,7 +85,12 @@ public:
   //! is not compatible w/ DAKOTA's multi-level parallelism.
   bool Evaluate(JEGA::Utilities::Design& des) override;
 
+  //! Custom utility to run error model
+  void ErrorEvaluationLoop();
+
 protected:
+
+  bool EvaluationLoop(JEGA::Utilities::DesignGroup& group);
 
   //! Here we only deal w/ continuous design variables.
   void SeparateVariables(const JEGA::Utilities::Design& from, 
@@ -100,7 +105,6 @@ protected:
                        JEGA::Utilities::Design& into) const;
 
   //! Functions to update decision maker.
-  bool RunErrorModel();
   void RecordEvaluationInDecisionMaker(const int id,
                                        const Dakota::RealVector& cont_vars,
                                        const Dakota::StringMultiArray& disc_strings);

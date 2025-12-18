@@ -169,6 +169,10 @@ AdaptiveJegaOptimizer::core_run()
 {
   EDDY_FUNC_DEBUGSCOPE
 
+  //---------------------------------------------------------------------------
+  // Initialize data-structures
+  //---------------------------------------------------------------------------
+
   // Load up an algorithm config and a problem config.
   ProblemConfig prob_config;
   LoadProblemConfig(prob_config);
@@ -190,6 +194,9 @@ AdaptiveJegaOptimizer::core_run()
   // of whether or not logging b/c it is used in a fatal error.
   const string& name = ga_algorithm->GetName();
 
+  //---------------------------------------------------------------------------
+  // Set initial population (if specified)
+  //---------------------------------------------------------------------------
 
   // The initializer requires some additional logic to account for the
   // possibility that JEGA is being used in a Dakota strategy.  If that is
@@ -248,12 +255,85 @@ AdaptiveJegaOptimizer::core_run()
   JEGALOG_II_G(lverbose(), this, text_entry(lverbose(), name + 
                ": About to perform algorithm execution."))
 
+  //---------------------------------------------------------------------------
+  // Begin Optimization Loop
+  //---------------------------------------------------------------------------
+  
+  // AN: Should be a user option later.
+  bool perform_corrections = true;
+
   // For SOGA this multiset contains designs with same "fitness".
-  DesignOFSortSet bests(driver.PerformIterations(ga_algorithm)); 
+  // prepare to time this run.
+  JEGA_LOGGING_IF_ON(clock_t start = clock();)
+
+  ga_algorithm->AlgorithmInitialize();
+  while(true) {
+
+    // Perform evaluations and identify the current best
+    bool ret = driver.PerformNextIteration(ga_algorithm);
+
+    // Re-evaluate designs if necessary
+    if(perform_corrections) {
+      CorrectBestDesigns(*ga_algorithm);
+    }
+
+    if(!ret) {
+      break;
+    }
+
+    // Now get the error estimate at each true evaluation using the error_model
+    // Only run error_model when sim_model was successfull. Otherwise, we let
+    // the code to fall through back to Dakota for printing errors messages.
+    if(decision_maker->NeedToComputeErrors()) {
+
+      shared_ptr<JegaEvaluator> evaluator(0x0);
+      try {
+        GeneticAlgorithmEvaluator &base_eval =
+          ga_algorithm->GetOperatorSet().GetEvaluator();
+        JegaEvaluator &sub_eval = dynamic_cast<JegaEvaluator&>(base_eval);
+        evaluator = std::shared_ptr<JegaEvaluator>(
+            &sub_eval,
+            [](JegaEvaluator*) { /* do not delete the orignal evaluator */ }
+        );
+      }
+      catch (const std::bad_cast&) {
+        JEGALOG_II_G_F(this, text_entry(lfatal(), 
+                       name + ": Expected JegaEvaluator as the GA evaluator.\n"))
+      }
+      evaluator->ErrorEvaluationLoop();
+      decision_maker->Train();
+
+    }
+
+  }
+  ga_algorithm->AlgorithmFinalize();
+
+  JEGA_LOGGING_IF_ON(
+      double elapsed =
+          static_cast<double>((clock() - start)) / CLOCKS_PER_SEC;
+      )
+
+  JEGALOG_II(ga_algorithm->GetLogger(), lquiet(), this,
+      ostream_entry(
+          lquiet(), "JEGA Front End: " + ga_algorithm->GetName() +
+          " execution took ") << elapsed << " seconds."
+      )
+
+  JEGALOG_II_G(lquiet(), this,
+      ostream_entry(lquiet(), "JEGA Front End: Execution took ")
+      << elapsed << " seconds."
+      )
+
+  DesignOFSortSet bests =
+    driver.DeepDuplicate(ga_algorithm->GetCurrentSolution());
 
   JEGALOG_II_G(lverbose(), this, ostream_entry(lverbose(), name + 
                ": algorithm execution completed. ") << bests.size() 
                << " solutions found. Passing them back to DAKOTA.")
+
+  //---------------------------------------------------------------------------
+  // Post-processing for DAKOTA output
+  //---------------------------------------------------------------------------
 
   // Return up to numBest solutions to DAKOTA, sorted first by L2
   // constraint violation, then (utopia distance or weighted sum
@@ -265,23 +345,23 @@ AdaptiveJegaOptimizer::core_run()
   // populate the sorted map of best solutions (fairly lightweight
   // map) key is pair<constraint_violation, fitness>, where fitness
   // is either utopia distance (MOGA) or objective value (SOGA)
-  std::multimap<RealRealPair, Design*> designSortMap;
-  GetBestSOSolutions(bests, *ga_algorithm, designSortMap);
+  std::multimap<RealRealPair, Design*> design_sort_map;
+  GetBestSOSolutions(bests, *ga_algorithm, design_sort_map);
 
-  JEGAIFLOG_II_G(designSortMap.size() == 0, lquiet(), this,
+  JEGAIFLOG_II_G(design_sort_map.size() == 0, lquiet(), this,
       text_entry(lquiet(), name + ": was unable to identify at least one "
           "best solution.  The Dakota best variables and best responses "
           "objects will be empty.\n\n")
       )
 
   // load the map into the DAKOTA vectors
-  resize_best_resp_array(designSortMap.size());
-  resize_best_vars_array(designSortMap.size());
+  resize_best_resp_array(design_sort_map.size());
+  resize_best_vars_array(design_sort_map.size());
   
   std::multimap<RealRealPair, Design*>::const_iterator best_it = 
-      designSortMap.begin(); 
+      design_sort_map.begin(); 
   const std::multimap<RealRealPair, Design*>::const_iterator best_end = 
-      designSortMap.end(); 
+      design_sort_map.end(); 
   ResponseArray::size_type index = 0;
   for( ; best_it != best_end; ++best_it, ++index) {
     LoadDakotaResponses(*(best_it->second), bestVariablesArray[index],
@@ -306,31 +386,31 @@ AdaptiveJegaOptimizer::core_run()
 JEGA::DoubleMatrix
 AdaptiveJegaOptimizer::ToDoubleMatrix(const VariablesArray& variables) const
 {
-    EDDY_FUNC_DEBUGSCOPE
-
-    // Prepare the resultant matrix with proper initial capacity
-    JEGA::DoubleMatrix ret(variables.size());
-
-    // Iterate the variables objects and create entries in the new matrix
-    size_t i = 0;
-    for(VariablesArray::const_iterator it(variables.begin());
-        it!=variables.end(); ++it, ++i)
-    {
-        // Store the continuous and discrete variables arrays for use below.
-        const RealVector& cvs  = (*it).continuous_variables();
-        const IntVector&  divs = (*it).discrete_int_variables();
-        const RealVector& drvs = (*it).discrete_real_variables();
-
-        // Prepare the row we are working with to hold all variable values.
-        ret[i].reserve(cvs.length() + divs.length() + drvs.length());
-
-        // Copy in first the continuous followed by the discrete values.
-        ret[i].insert(ret[i].end(), cvs.values(), cvs.values()+cvs.length());
-        ret[i].insert(ret[i].end(), divs.values(), divs.values()+divs.length());
-        ret[i].insert(ret[i].end(), drvs.values(), drvs.values()+drvs.length());
-    }
-
-    return ret;
+  EDDY_FUNC_DEBUGSCOPE
+  
+  // Prepare the resultant matrix with proper initial capacity
+  JEGA::DoubleMatrix ret(variables.size());
+  
+  // Iterate the variables objects and create entries in the new matrix
+  size_t i = 0;
+  for(VariablesArray::const_iterator it(variables.begin());
+      it!=variables.end(); ++it, ++i)
+  {
+      // Store the continuous and discrete variables arrays for use below.
+      const RealVector& cvs  = (*it).continuous_variables();
+      const IntVector&  divs = (*it).discrete_int_variables();
+      const RealVector& drvs = (*it).discrete_real_variables();
+  
+      // Prepare the row we are working with to hold all variable values.
+      ret[i].reserve(cvs.length() + divs.length() + drvs.length());
+  
+      // Copy in first the continuous followed by the discrete values.
+      ret[i].insert(ret[i].end(), cvs.values(), cvs.values()+cvs.length());
+      ret[i].insert(ret[i].end(), divs.values(), divs.values()+divs.length());
+      ret[i].insert(ret[i].end(), drvs.values(), drvs.values()+drvs.length());
+  }
+  
+  return ret;
 }
 
 //-----------------------------------------------------------------------------
@@ -359,9 +439,9 @@ void AdaptiveJegaOptimizer::LoadParameterDatabase()
   // HARD CODED as there is some bug in DAKOTA.
   if (constraint_penalty >= 0.)
     //param_db->AddDoubleParam("method.constraint_penalty", constraint_penalty);
-    param_db->AddDoubleParam("method.constraint_penalty", 10.0);
+    param_db->AddDoubleParam("method.constraint_penalty", 20.0);
   else
-    param_db->AddDoubleParam("method.constraint_penalty", 10.0);
+    param_db->AddDoubleParam("method.constraint_penalty", 20.0);
 
   const Real& crossover_rate = prob_db.get_real("method.crossover_rate");
   if (crossover_rate >= 0.)
@@ -834,7 +914,7 @@ AdaptiveJegaOptimizer::LoadConstraints(ProblemConfig &config)
 void
 AdaptiveJegaOptimizer::GetBestSOSolutions(const DesignOFSortSet &from, 
                                           const GeneticAlgorithm &ga,
-                                          multimap<RealRealPair, Design*> &designSortMap)
+                                          multimap<RealRealPair, Design*> &design_sort_map)
 {
 
   EDDY_FUNC_DEBUGSCOPE
@@ -894,17 +974,17 @@ AdaptiveJegaOptimizer::GetBestSOSolutions(const DesignOFSortSet &from,
     // insert the design into the map, keeping only numBest
     RealRealPair metrics(constraint_violation, objectiveFunction);
 
-    if(designSortMap.size() < numFinalSolutions)
-      designSortMap.insert(std::make_pair(metrics, *design_it));
+    if(design_sort_map.size() < numFinalSolutions)
+      design_sort_map.insert(std::make_pair(metrics, *design_it));
     else {
       // if this Design is better than the worst, remove worst
       // and insert this one
       std::multimap<RealRealPair, Design*>::iterator worst_it =
-          --designSortMap.end();
+          --design_sort_map.end();
 
       if(metrics < worst_it->first) {
-        designSortMap.erase(worst_it);
-        designSortMap.insert(std::make_pair(metrics, *design_it));
+        design_sort_map.erase(worst_it);
+        design_sort_map.insert(std::make_pair(metrics, *design_it));
       }
     }
   }
@@ -987,3 +1067,25 @@ AdaptiveJegaOptimizer::LoadDakotaResponses(const Design &from, Variables &vars,
 
 //-----------------------------------------------------------------------------
 
+void
+AdaptiveJegaOptimizer::CorrectBestDesigns(GeneticAlgorithm& the_ga)
+{
+
+//  //! Prepare the current best design set
+//  DesignOFSortSet iter_best =
+//    driver.DeepDuplicate(ga_algorithm->GetCurrentSolution());
+//  
+//  std::multimap<RealRealPair, Design*> iter_sort_map;
+//  GetBestSOSolutions(iter_best, *ga_algorithm, iter_sort_map);
+//  
+//  //! Prepare the design group 
+//  DesignGroup iter_best_grp;
+//  for(const auto &it : iter_sort_map) {
+//    if(!it->second) continue;
+//    iter_best_grp.Insert(it->second);
+//  }
+//  
+//  //! Re-evaluate
+        
+
+}
