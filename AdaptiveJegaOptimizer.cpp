@@ -259,7 +259,7 @@ AdaptiveJegaOptimizer::core_run()
   // Begin Optimization Loop
   //---------------------------------------------------------------------------
   
-  // AN: Should be a user option later.
+  // TODO: AN: Should be a user option later.
   bool perform_corrections = true;
 
   // For SOGA this multiset contains designs with same "fitness".
@@ -267,44 +267,20 @@ AdaptiveJegaOptimizer::core_run()
   JEGA_LOGGING_IF_ON(clock_t start = clock();)
 
   ga_algorithm->AlgorithmInitialize();
-  while(true) {
-
-    // Perform evaluations and identify the current best
-    bool ret = driver.PerformNextIteration(ga_algorithm);
-
+  while(driver.PerformNextIteration(ga_algorithm)) {
     // Re-evaluate designs if necessary
-    if(perform_corrections) {
-      CorrectBestDesigns(*ga_algorithm);
+    if(perform_corrections && !CorrectBestDesigns(*ga_algorithm)) {
+      JEGALOG_II_G_F(this, text_entry(lfatal(), 
+                     name + ": Re-evaluations of best designs requested "
+                     "and failed.\n"))
     }
-
-    if(!ret) {
-      break;
-    }
-
     // Now get the error estimate at each true evaluation using the error_model
     // Only run error_model when sim_model was successfull. Otherwise, we let
     // the code to fall through back to Dakota for printing errors messages.
     if(decision_maker->NeedToComputeErrors()) {
-
-      shared_ptr<JegaEvaluator> evaluator(0x0);
-      try {
-        GeneticAlgorithmEvaluator &base_eval =
-          ga_algorithm->GetOperatorSet().GetEvaluator();
-        JegaEvaluator &sub_eval = dynamic_cast<JegaEvaluator&>(base_eval);
-        evaluator = std::shared_ptr<JegaEvaluator>(
-            &sub_eval,
-            [](JegaEvaluator*) { /* do not delete the orignal evaluator */ }
-        );
-      }
-      catch (const std::bad_cast&) {
-        JEGALOG_II_G_F(this, text_entry(lfatal(), 
-                       name + ": Expected JegaEvaluator as the GA evaluator.\n"))
-      }
-      evaluator->ErrorEvaluationLoop();
+      ExecuteErrorCalculations(*ga_algorithm);
       decision_maker->Train();
-
     }
-
   }
   ga_algorithm->AlgorithmFinalize();
 
@@ -1016,31 +992,7 @@ AdaptiveJegaOptimizer::LoadDakotaResponses(const Design &from, Variables &vars,
   for(size_t i=0; i<numContinuousVars; ++i)
     c_vars[i] = from.GetVariableValue(i);
 
-  //! Get information from the decision maker
-  
-  StringMultiArrayConstView d_s_labels = 
-    vars.inactive_discrete_string_variable_labels();
-
-  size_t index=-1;
-  size_t counter=0;
-  for(const auto &label : d_s_labels) {
-    if(label == "SWITCH") {
-      index = counter;
-      break;
-    }
-    counter++;
-  }
-
-  decision_maker->GetEvalTypeAndMetaData(c_vars, d_s_vars[index], 
-    d_i_vars, num_idiv-1);
-
-  size_t idsv_len = d_s_vars.num_elements();
-  StringMultiArrayConstView idsv_view = d_s_vars[
-    boost::indices[idx_range(0,idsv_len)]];
-
   vars.continuous_variables(c_vars);
-  vars.inactive_discrete_int_variables(d_i_vars);
-  vars.inactive_discrete_string_variables(idsv_view);
 
 //PDH: JEGA responses to Dakota responses.
 //     Don't know what the JEGA data structure is.  These are all
@@ -1068,24 +1020,101 @@ AdaptiveJegaOptimizer::LoadDakotaResponses(const Design &from, Variables &vars,
 //-----------------------------------------------------------------------------
 
 void
+AdaptiveJegaOptimizer::ExecuteErrorCalculations(GeneticAlgorithm &the_ga)
+{
+  shared_ptr<JegaEvaluator> evaluator(0x0);
+  try {
+    GeneticAlgorithmEvaluator &base_eval =
+      the_ga.GetOperatorSet().GetEvaluator();
+    JegaEvaluator &sub_eval = dynamic_cast<JegaEvaluator&>(base_eval);
+    evaluator = std::shared_ptr<JegaEvaluator>(
+        &sub_eval,
+        [](JegaEvaluator*) { /* do not delete the orignal evaluator */ }
+    );
+  }
+  catch (const std::bad_cast&) {
+    const string& name = the_ga.GetName();
+    JEGALOG_II_G_F(this, text_entry(lfatal(), 
+                   name + ": Expected JegaEvaluator as the GA evaluator.\n"))
+  }
+  evaluator->ErrorEvaluationLoop();
+}
+
+//-----------------------------------------------------------------------------
+
+bool
 AdaptiveJegaOptimizer::CorrectBestDesigns(GeneticAlgorithm& the_ga)
 {
 
-//  //! Prepare the current best design set
-//  DesignOFSortSet iter_best =
-//    driver.DeepDuplicate(ga_algorithm->GetCurrentSolution());
-//  
-//  std::multimap<RealRealPair, Design*> iter_sort_map;
-//  GetBestSOSolutions(iter_best, *ga_algorithm, iter_sort_map);
-//  
-//  //! Prepare the design group 
-//  DesignGroup iter_best_grp;
-//  for(const auto &it : iter_sort_map) {
-//    if(!it->second) continue;
-//    iter_best_grp.Insert(it->second);
-//  }
-//  
-//  //! Re-evaluate
-        
+  const string& name = the_ga.GetName();
+  JEGALOG_II(the_ga.GetLogger(), ldebug(), this,
+   ostream_entry(lquiet(), "JEGA Front End: " + name +
+   ": Correcting best desings."))
 
+  //---------------------------------------------------------------------------
+  // Get the best designs
+  //---------------------------------------------------------------------------
+  DesignOFSortSet iter_best = the_ga.GetCurrentSolution();
+  
+  std::multimap<RealRealPair, Design*> iter_sort_map;
+  GetBestSOSolutions(iter_best, the_ga, iter_sort_map);
+  
+  //---------------------------------------------------------------------------
+  // Prepare a design group for re-evaluations
+  //---------------------------------------------------------------------------
+  int num_cv = ModelUtils::cv(*iteratedModel);
+  RealVector continuous_variables(num_cv);
+
+  DesignTarget &target = the_ga.GetDesignTarget();
+  const DesignVariableInfoVector &dv_info = target.GetDesignVariableInfos();
+
+  vector<Design*> true_eval_candidates(iter_sort_map.size(), 0x0);
+  size_t num_approx_candidates = 0;
+  for(auto &it : iter_sort_map) {
+
+    Design *curr_design = it.second;
+
+    for(int i=0; i<num_cv; ++i) {
+      EDDY_ASSERT(dv_info[i]->IsContinuum());
+      continuous_variables[i] = dv_info[i]->WhichValue(*curr_design);
+    }
+
+    String eval_type = decision_maker->GetEvaluationType(continuous_variables);
+
+    if(eval_type == "APPROX") {
+      curr_design->SetEvaluated(false);
+      curr_design->SetIllconditioned(false);
+      true_eval_candidates[num_approx_candidates] = curr_design;
+      num_approx_candidates++;
+    }
+
+  }
+  true_eval_candidates.resize(num_approx_candidates);
+
+  //! Create a new group
+  DesignGroup reeval_group(target, true_eval_candidates); 
+  
+  //---------------------------------------------------------------------------
+  // Re-evaluate best designs
+  //---------------------------------------------------------------------------
+  shared_ptr<JegaEvaluator> evaluator(0x0);
+  try {
+    GeneticAlgorithmEvaluator &base_eval =
+      the_ga.GetOperatorSet().GetEvaluator();
+    JegaEvaluator &sub_eval = dynamic_cast<JegaEvaluator&>(base_eval);
+    evaluator = std::shared_ptr<JegaEvaluator>(
+        &sub_eval,
+        [](JegaEvaluator*) { /* do not delete the orignal evaluator */ }
+    );
+  }
+  catch (const std::bad_cast&) {
+    JEGALOG_II_G_F(this, text_entry(lfatal(), 
+                   name + ": Expected JegaEvaluator as the GA evaluator.\n"))
+  }
+  bool ret = evaluator->EvaluationLoop(reeval_group, "TRUE");
+
+  return ret;
 }
+
+//-----------------------------------------------------------------------------
+

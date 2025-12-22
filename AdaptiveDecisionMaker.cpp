@@ -88,44 +88,41 @@ AdaptiveDecisionMaker::ReadOptionsFile(const String filename)
 
 //------------------------------------------------------------------------------
 
-void AdaptiveDecisionMaker::GetEvalTypeAndMetaData(const RealVector &cont_vars, 
-                                                   String &into_type,
-                                                   IntVector &into_metadata, 
-                                                   size_t num_points,
-                                                   bool flag)
-{
-
-  assert(into_metadata.length() == num_points+1);
-
-  //! First get evaluation type "ERROR", "TRUE", "APPROX"
-  GetEvaluationType(cont_vars, into_type, flag);
-
-  //! Avoid neighbor calculation if evaluation is "TRUE"
-  if(into_type == "TRUE") {
-    for(int i=0; i<into_metadata.length(); ++i) 
-      into_metadata[i] = -1;
-    return;
-  }
-
-  int target = -1; //! target evaluation id for "ERROR" runs.
-  IntVector candidates(num_points);
-  GetTargetAndNearestNeighbors(cont_vars, target, candidates, num_points, flag);
-
-  //! Fill up neighbors for "ERROR" and "APPROX" types
-  into_metadata[0] = (into_type == "APPROX") ? -1 : target;
-  for(int i=0; i<num_points; ++i) {
-    into_metadata[i+1] = candidates[i];
-  }
-
-}
+//void AdaptiveDecisionMaker::GetEvalTypeAndMetaData(const RealVector &cont_vars, 
+//                                                   String &into_type,
+//                                                   IntVector &into_metadata, 
+//                                                   size_t num_points,
+//                                                   bool flag)
+//{
+//
+//  //! First get evaluation type "ERROR", "TRUE", "APPROX"
+//  GetEvaluationType(cont_vars, into_type, flag);
+//
+//  //! Avoid neighbor calculation if evaluation is "TRUE"
+//  if(into_type == "TRUE") {
+//    for(int i=0; i<into_metadata.length(); ++i) 
+//      into_metadata[i] = -1;
+//    return;
+//  }
+//
+//  int target = -1; //! target evaluation id for "ERROR" runs.
+//  IntVector candidates(num_points);
+//  GetTargetAndNearestNeighbors(cont_vars, target, candidates, num_points, flag);
+//
+//  //! Fill up neighbors for "ERROR" and "APPROX" types
+//  into_metadata[0] = (into_type == "APPROX") ? -1 : target;
+//  for(int i=0; i<num_points; ++i) {
+//    into_metadata[i+1] = candidates[i];
+//  }
+//
+//}
 
 //------------------------------------------------------------------------------
 
 void AdaptiveDecisionMaker::GetTargetAndNearestNeighbors(const RealVector &cont_vars, 
                                                          int &target,
                                                          IntVector &candidates, 
-                                                         size_t num_points,
-                                                         bool flag)
+                                                         size_t num_points)
 {
 
   if(candidates.length() != num_points) {
@@ -133,14 +130,14 @@ void AdaptiveDecisionMaker::GetTargetAndNearestNeighbors(const RealVector &cont_
   }
 
   //! Throw an error if force find is true but true-db is empty.
-  if(flag and id2var.empty()) {
+  if(id2var.empty()) {
     Cerr << "Adaptive SOGA Error: Trying to find nearest neighbors "
          << "in an empty database.\n";
     abort_handler(METHOD_ERROR);
   }
 
   //! Throw an error true-db does not have enough points
-  if(flag and id2var.size() < num_points) {
+  if(id2var.size() < num_points) {
     Cerr << "Adaptive SOGA Error: Number of true evaluations stored "
          << "(" << id2var.size() << ") "
          << "is less than number of neighbors requested "
@@ -161,9 +158,7 @@ void AdaptiveDecisionMaker::GetTargetAndNearestNeighbors(const RealVector &cont_
     //! any "true-evaluation" IDs that don't yet have an error entry, as
     //! the errors are logged only after the evaluation finishes.
     
-    if(!flag and id2error.find(tr_it->first) == id2error.end()) {
-      //! This check is bypassed when flag is set to true, which is the
-      //! case for error evaluations.
+    if(id2error.find(tr_it->first) == id2error.end()) {
       continue;
     }
 
@@ -193,30 +188,21 @@ void AdaptiveDecisionMaker::GetTargetAndNearestNeighbors(const RealVector &cont_
 
 //------------------------------------------------------------------------------
 
-void
-AdaptiveDecisionMaker::GetEvaluationType(const RealVector &cont_vars,
-                                         String &into,
-                                         bool flag)
+String
+AdaptiveDecisionMaker::GetEvaluationType(const RealVector &cont_vars)
 {
 
-  //! These are simulations for computing errors
-  //! for true design evaluations.
-  if(flag) {
-    into = "ERROR";
-    return;
-  }
-
   //! Set the base case
-  into = "TRUE";
+  String into = "TRUE";
 
   //! Return when databse is empty.
   if(id2var.empty()) {
-    return;
+    return into;
   }
   
   //! Return when GP model is not ready.
   if(!ready_to_predict) {
-    return;
+    return into;
   }
 
   //! Check if there is an existing decision for this variable
@@ -225,7 +211,7 @@ AdaptiveDecisionMaker::GetEvaluationType(const RealVector &cont_vars,
   for(; it!=e; ++it) {
     if(it->second == cont_vars) {
       into = id2type[it->first];
-      return;
+      return into;
     }
   }
 
@@ -253,6 +239,8 @@ AdaptiveDecisionMaker::GetEvaluationType(const RealVector &cont_vars,
     Cout << "decision   : " << into << "\n";
     Cout << "\n";
   }
+
+  return into;
 
 }
 

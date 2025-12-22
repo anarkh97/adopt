@@ -87,19 +87,20 @@ public:
 
   //! Custom utility to run error model
   void ErrorEvaluationLoop();
+  bool EvaluationLoop(JEGA::Utilities::DesignGroup& group, Dakota::String type);
 
 protected:
-
-  bool EvaluationLoop(JEGA::Utilities::DesignGroup& group);
 
   //! Here we only deal w/ continuous design variables.
   void SeparateVariables(const JEGA::Utilities::Design& from, 
                          Dakota::RealVector& into_cont) const;
 
+  Dakota::String GetEvaluationType(const Dakota::RealVector& cont_vars);
+
   void SetStateVariables(const Dakota::RealVector& cont_vars,
                          Dakota::IntVector& into_disc_int,
 			                   Dakota::StringMultiArray& into_disc_string,
-			                   const bool error_flag=false);
+                         Dakota::String type);
 
   void RecordResponses(const Dakota::RealVector& from, 
                        JEGA::Utilities::Design& into) const;

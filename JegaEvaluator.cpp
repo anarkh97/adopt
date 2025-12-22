@@ -181,11 +181,24 @@ const
 
 //-----------------------------------------------------------------------------
 
+String
+JegaEvaluator::GetEvaluationType(const RealVector& cont_vars)
+{
+  EDDY_FUNC_DEBUGSCOPE
+
+  size_t num_cv   = ModelUtils::cv(sim_model);
+  EDDY_ASSERT(cont_vars.length() == num_cv);
+
+  return decision_maker.GetEvaluationType(cont_vars);
+}
+
+//-----------------------------------------------------------------------------
+
 void
 JegaEvaluator::SetStateVariables(const RealVector& cont_vars, 
                                  IntVector &into_disc_int,
                                  StringMultiArray &into_disc_string,
-                                 const bool error_flag)
+                                 String eval_type)
 {
   EDDY_FUNC_DEBUGSCOPE
 
@@ -206,9 +219,26 @@ JegaEvaluator::SetStateVariables(const RealVector& cont_vars,
   
   // Set inactive discrete string set variable -> Evaluation Type
   // Set inactive discrete integer variable -> Neighbor evaluation IDs.  
-  decision_maker.GetEvalTypeAndMetaData(cont_vars, 
-    into_disc_string[switch_label_idx], into_disc_int, 
-    num_idiv-1, error_flag);
+
+  into_disc_string[switch_label_idx] = eval_type;
+  if(eval_type == "TRUE") {
+    for(int i=0; i<num_idiv; ++i)
+      into_disc_int[i] = -1;
+  }
+  else if(eval_type == "APPROX" || eval_type == "ERROR") {
+    int target_id = -1;
+    IntVector candidates;
+    decision_maker.GetTargetAndNearestNeighbors(cont_vars,
+      target_id, candidates, num_idiv-1);
+    into_disc_int[0] = target_id;
+    for(int i=1; i<num_idiv; ++i)
+      into_disc_int[i] = candidates[i-1];
+  }
+  else {
+    JEGALOG_II_G_F(this, text_entry(lfatal(), "Adaptive JEGA Error: "
+                   "Something is wrong. Found an incorrect \"SWITCH\" value.\n"))
+  }
+  
 }
 
 //-----------------------------------------------------------------------------
@@ -257,9 +287,10 @@ JegaEvaluator::RecordEvaluationInDecisionMaker(const int id,
 
   EDDY_FUNC_DEBUGSCOPE
 
+  const String &eval_type = state_string_vars[switch_label_idx];
+
   // Update the decision maker w/ evaluation id and variables.
-  decision_maker.RecordEvaluationDecision(id, cont_vars, 
-    state_string_vars[switch_label_idx]);
+  decision_maker.RecordEvaluationDecision(id, cont_vars, eval_type);
 
 }
 
@@ -289,11 +320,9 @@ JegaEvaluator::Evaluate(DesignGroup &group)
 {
 
   //---------------------------------------------------------------------------
-  // Prepare containers 
+  // Prepare container(s) 
   //---------------------------------------------------------------------------
   RealVector       continuous_variables;
-  IntVector        state_int_vars;
-  StringMultiArray state_string_vars; // "ERROR", "APPROX", "TRUE"
 
   //---------------------------------------------------------------------------
   // Split group into "True" and "Approx" evaluations 
@@ -312,10 +341,8 @@ JegaEvaluator::Evaluate(DesignGroup &group)
   for(; it!=e; ++it) {
 
     SeparateVariables(**it, continuous_variables);
-    SetStateVariables(continuous_variables, state_int_vars, state_string_vars);
+    String switch_val = GetEvaluationType(continuous_variables);
     
-    const String switch_val = state_string_vars[switch_label_idx];
-
     if(switch_val == "TRUE") {
       if(tr_des_size >= tr_designs.size()) 
         tr_designs.resize(tr_designs.size() + initial_size, 0x0);
@@ -346,8 +373,8 @@ JegaEvaluator::Evaluate(DesignGroup &group)
   DesignGroup a_group(target, ap_designs);
 
   // "True" evaluations undertaken first for efficient use of resources
-  bool t_ret = EvaluationLoop(t_group);
-  bool a_ret = EvaluationLoop(a_group);
+  bool t_ret = EvaluationLoop(t_group, "TRUE");
+  bool a_ret = EvaluationLoop(a_group, "APPROX");
 
   bool ret = t_ret && a_ret;
 
@@ -372,10 +399,8 @@ JegaEvaluator::ErrorEvaluationLoop()
   // Run the "error" evaluations and perform model training
   //---------------------------------------------------------------------------
 
-  IntRealVectorMap::const_iterator tr_it(
-    decision_maker.GetBeginForTrueDatabase());
-  const IntRealVectorMap::const_iterator tr_e(
-    decision_maker.GetEndForTrueDatabase());
+  IntRealVectorMap::const_iterator tr_it(decision_maker.GetBeginForTrueDatabase());
+  const IntRealVectorMap::const_iterator tr_e(decision_maker.GetEndForTrueDatabase());
 
   JEGALOG_II(GetLogger(), ldebug(), this,
     text_entry(ldebug(), GetName() + ": Performing group error evaluation."))
@@ -388,7 +413,7 @@ JegaEvaluator::ErrorEvaluationLoop()
     //========================================================================
     // Pass error flag to analysis driver.
     //========================================================================
-    SetStateVariables(tr_it->second, state_int_vars, state_string_vars, true); 
+    SetStateVariables(tr_it->second, state_int_vars, state_string_vars, "ERROR"); 
     ModelUtils::inactive_discrete_int_variables(error_model, state_int_vars);
     const size_t idsv_len = state_string_vars.num_elements();
     StringMultiArrayConstView idsv_view = state_string_vars[
@@ -450,7 +475,7 @@ JegaEvaluator::ErrorEvaluationLoop()
 //! Performs design evaluations using the model interface.
 //! Refactored from JEGAOptimizer::Evaluator::Evaluate
 bool
-JegaEvaluator::EvaluationLoop(DesignGroup &group)
+JegaEvaluator::EvaluationLoop(DesignGroup &group, String switch_val)
 {
   EDDY_FUNC_DEBUGSCOPE
 
@@ -468,14 +493,8 @@ JegaEvaluator::EvaluationLoop(DesignGroup &group)
   //---------------------------------------------------------------------------
   // Prepare to evaluate
   //---------------------------------------------------------------------------
-
   // we'll prepare containers for repeated use without re-construction
   RealVector       continuous_variables;
-/*
-  RealVector        disc_int_vars;
-  RealVector       disc_real_vars;
-  StringMultiArray disc_string_vars;
-*/
 
   // arrays/vectors for adaptive decision model
   IntVector        state_int_vars;
@@ -486,8 +505,6 @@ JegaEvaluator::EvaluationLoop(DesignGroup &group)
 
   // Find out the counts on the different types of constraints
   const size_t num_nonlin_cn = GetNumberNonLinearConstraints();
-  // NOT COMMENTED BY AN
-  // const size_t num_lin_cn = GetNumberLinearConstraints();
 
   // Get the information about the constraints.
   const ConstraintInfoVector& cninfos = target.GetConstraintInfos();
@@ -529,31 +546,17 @@ JegaEvaluator::EvaluationLoop(DesignGroup &group)
 
     // extract the real and continuous variables
     // from the current Design
-    SeparateVariables(**it, continuous_variables /*, disc_int_vars, disc_real_vars,
-        disc_string_vars*/);
+    SeparateVariables(**it, continuous_variables);
 
     // send this guy out for evaluation using the "sim_model"
 
     // first, set the current values of the variables in the model
     ModelUtils::continuous_variables(sim_model, continuous_variables);
-    //ModelUtils::discrete_int_variables(sim_model, disc_int_vars);
-    //ModelUtils::discrete_real_variables(sim_model, disc_real_vars);
-    //// Strings set by calling single value setter for each
-    ////for (size_t i=0; i<disc_string_vars.num_elements(); ++i)
-    ////  ModelUtils::discrete_string_variable(sim_model, disc_string_vars[i],i);
-    //// Could use discrete_string_varables to avoid overhead of repeated 
-    //// function calls, but it takes a StringMultiArrayConstView, which
-    //// must be created from disc_string_vars. Maybe there's a simpler way,
-    //// but...
-    //// const size_t &dsv_len = disc_string_vars.num_elements();
-    //// StringMultiArrayConstView dsv_view = disc_string_vars[ 
-    ////   boost::indices[idx_range(0,dsv_len)]];
-    //// ModelUtils::discrete_string_variables(this->_model, dsv_view);
     
-    //=========================================================================
+    //-------------------------------------------------------------------------
     // Pass decision to analysis driver.
-    //=========================================================================
-    SetStateVariables(continuous_variables, state_int_vars, state_string_vars);
+    //-------------------------------------------------------------------------
+    SetStateVariables(continuous_variables, state_int_vars, state_string_vars, switch_val);
     ModelUtils::inactive_discrete_int_variables(sim_model, state_int_vars);
     const size_t idsv_len = state_string_vars.num_elements();
     StringMultiArrayConstView idsv_view = state_string_vars[

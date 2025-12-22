@@ -52,7 +52,8 @@ public:
 private:
 
   //! Custom methods
-  void CorrectBestDesigns(JEGA::Algorithms::GeneticAlgorithm& the_ga);
+  bool CorrectBestDesigns(JEGA::Algorithms::GeneticAlgorithm& the_ga);
+  void ExecuteErrorCalculations(JEGA::Algorithms::GeneticAlgorithm& the_ga);
 
   //! JEGA related methods
   void LoadParameterDatabase();
