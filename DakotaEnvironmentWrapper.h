@@ -2,9 +2,9 @@
 #define _DAKOTA_ENVIRONMENT_WRAPPER_H_
 
 // Dakota includes
-#include<ParallelLibrary.hpp>
-#include<ProblemDescDB.hpp>
-#include<LibraryEnvironment.hpp>
+#include <ParallelLibrary.hpp>
+#include <ProblemDescDB.hpp>
+#include <LibraryEnvironment.hpp>
 
 /************************************************
  * A lightweight wrapper for Dakota's 
@@ -20,31 +20,33 @@
  * typically performed in the analysis driver.
  ***********************************************/
 
-class DakotaEnvironmentWrapper : public Dakota::LibraryEnvironment {
+class DakotaEnvironmentWrapper : public Dakota::LibraryEnvironment
+{
 
   bool adaptive_optimization;
 
 public:
-
-  DakotaEnvironmentWrapper(Dakota::ProgramOptions options = Dakota::ProgramOptions(),
-                           bool check_bcast_construct = true,
+  DakotaEnvironmentWrapper(Dakota::ProgramOptions options
+                           = Dakota::ProgramOptions(),
+                           bool check_bcast_construct             = true,
                            Dakota::DbCallbackFunctionPtr callback = nullptr,
-                           void* callback_data = nullptr);
+                           void *callback_data                    = nullptr);
 
-  DakotaEnvironmentWrapper(Dakota::MPI_Comm dakota_comm,
-                           Dakota::ProgramOptions options = Dakota::ProgramOptions(),
-                  			   bool check_bcast_construct = true,
-			                     Dakota::DbCallbackFunctionPtr callback = nullptr,
-                           void* callback_data = nullptr);
+  DakotaEnvironmentWrapper(Dakota::MPI_Comm       dakota_comm,
+                           Dakota::ProgramOptions options
+                           = Dakota::ProgramOptions(),
+                           bool check_bcast_construct             = true,
+                           Dakota::DbCallbackFunctionPtr callback = nullptr,
+                           void *callback_data                    = nullptr);
 
   //! Object deletion left to LibraryEnvironment for now
-  ~DakotaEnvironmentWrapper() { }
+  ~DakotaEnvironmentWrapper()
+  {
+  }
 
 private:
-
   void SetupAdaptiveOptimizer();
   void SetupAdaptiveOptimizationVariables();
-
 };
 
 #endif

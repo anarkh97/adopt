@@ -1,4 +1,4 @@
-#include<JegaDriver.h>
+#include <JegaDriver.h>
 
 using namespace std;
 using namespace JEGA::Logging;
@@ -10,7 +10,7 @@ using namespace JEGA::Algorithms;
 //-----------------------------------------------------------------------------
 
 JegaDriver::JegaDriver(const ProblemConfig &config)
-          : JEGA::FrontEnd::Driver(config)
+    : JEGA::FrontEnd::Driver(config)
 {
   EDDY_FUNC_DEBUGSCOPE
 }

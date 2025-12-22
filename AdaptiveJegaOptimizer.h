@@ -2,12 +2,12 @@
 #define _ADAPTIVE_JEGA_OPTIMIZER_H_
 
 //! Optimization related headers
-#include<JEGAOptimizer.hpp>
-#include<JegaEvaluatorCreator.h>
-#include<JegaEvaluator.h>
-#include<JegaDriver.h>
+#include <JEGAOptimizer.hpp>
+#include <JegaEvaluatorCreator.h>
+#include <JegaEvaluator.h>
+#include <JegaDriver.h>
 //! Surrogate model related headers
-#include<AdaptiveDecisionMaker.h>
+#include <AdaptiveDecisionMaker.h>
 
 /*****************************************************
  *  This class extends JEGAOptimizer, Dakota's 
@@ -25,18 +25,18 @@
  *  functionality.
  *****************************************************/
 
-class AdaptiveJegaOptimizer : public Dakota::Optimizer {
+class AdaptiveJegaOptimizer : public Dakota::Optimizer
+{
 
-  std::shared_ptr<JEGA::Utilities::ParameterDatabase> param_db; 
-  std::shared_ptr<JegaEvaluatorCreator> eval_creator;
-  std::shared_ptr<AdaptiveDecisionMaker> decision_maker;
+  std::shared_ptr<JEGA::Utilities::ParameterDatabase> param_db;
+  std::shared_ptr<JegaEvaluatorCreator>               eval_creator;
+  std::shared_ptr<AdaptiveDecisionMaker>              decision_maker;
 
   Dakota::VariablesArray _initPts;
- 
-public:
 
+public:
   //! Default constructor
-  AdaptiveJegaOptimizer(Dakota::ProblemDescDB& prob_db, 
+  AdaptiveJegaOptimizer(Dakota::ProblemDescDB         &prob_db,
                         std::shared_ptr<Dakota::Model> sim_model,
                         std::shared_ptr<Dakota::Model> err_model);
 
@@ -47,37 +47,38 @@ public:
   void core_run() override;
 
   //! Note we can return multiple best solutions even in the case of SOGA.
-  bool returns_multiple_points() const override { return true; };
+  bool returns_multiple_points() const override
+  {
+    return true;
+  };
 
 private:
-
   //! Custom methods
-  bool CorrectBestDesigns(JEGA::Algorithms::GeneticAlgorithm& the_ga);
-  void ExecuteErrorCalculations(JEGA::Algorithms::GeneticAlgorithm& the_ga);
+  bool CorrectBestDesigns(JEGA::Algorithms::GeneticAlgorithm &the_ga);
+  void ExecuteErrorCalculations(JEGA::Algorithms::GeneticAlgorithm &the_ga);
 
   //! JEGA related methods
   void LoadParameterDatabase();
-  void LoadAlgorithmConfig(JEGA::FrontEnd::AlgorithmConfig& config);
-  void LoadProblemConfig(JEGA::FrontEnd::ProblemConfig& config);
-  void LoadDesignVariables(JEGA::FrontEnd::ProblemConfig& config);
-  void LoadObjectiveFunctions(JEGA::FrontEnd::ProblemConfig& config);
-  void LoadConstraints(JEGA::FrontEnd::ProblemConfig& config);
+  void LoadAlgorithmConfig(JEGA::FrontEnd::AlgorithmConfig &config);
+  void LoadProblemConfig(JEGA::FrontEnd::ProblemConfig &config);
+  void LoadDesignVariables(JEGA::FrontEnd::ProblemConfig &config);
+  void LoadObjectiveFunctions(JEGA::FrontEnd::ProblemConfig &config);
+  void LoadConstraints(JEGA::FrontEnd::ProblemConfig &config);
 
-  JEGA::DoubleMatrix ToDoubleMatrix(const Dakota::VariablesArray& variables) const;
+  JEGA::DoubleMatrix
+  ToDoubleMatrix(const Dakota::VariablesArray &variables) const;
 
   //! Dakota related methods
   //! MOGA functionality has been removed for now.
-  void GetBestSOSolutions(const JEGA::Utilities::DesignOFSortSet& from,
-                          const JEGA::Algorithms::GeneticAlgorithm& ga,
-                          std::multimap<Dakota::RealRealPair, 
-                                        JEGA::Utilities::Design*>&);
+  void GetBestSOSolutions(
+    const JEGA::Utilities::DesignOFSortSet   &from,
+    const JEGA::Algorithms::GeneticAlgorithm &ga,
+    std::multimap<Dakota::RealRealPair, JEGA::Utilities::Design *> &);
 
-  void LoadDakotaResponses(const JEGA::Utilities::Design& from, 
-                           Dakota::Variables& vars, 
-                           Dakota::Response& resp) const;
-
+  void LoadDakotaResponses(const JEGA::Utilities::Design &from,
+                           Dakota::Variables             &vars,
+                           Dakota::Response              &resp) const;
 };
-
 
 /*****************************************************
  *  This class derives from TraitsBase. Dakota 
@@ -87,45 +88,64 @@ private:
  *  want to mimic JEGATraits as much as possible. 
  *****************************************************/
 
-class AdaptiveJegaTraits : public Dakota::TraitsBase {
+class AdaptiveJegaTraits : public Dakota::TraitsBase
+{
 
 public:
-
   //! Default constructor
-  AdaptiveJegaTraits() { };
+  AdaptiveJegaTraits() {};
 
   //! Destructor
-  virtual ~AdaptiveJegaTraits() { };
+  virtual ~AdaptiveJegaTraits() {};
 
   //! This is needed to handle constraints
-  inline static double noValue() { return std::numeric_limits<Dakota::Real>::max(); }
+  inline static double noValue()
+  {
+    return std::numeric_limits<Dakota::Real>::max();
+  }
 
   //! Return the flag indicating whether method supports continuous variables
-  bool supports_continuous_variables() override { return true; }
+  bool supports_continuous_variables() override
+  {
+    return true;
+  }
 
   //! Return the flag indicating whether method supports linear equalities
-  bool supports_linear_equality() override { return true; }
+  bool supports_linear_equality() override
+  {
+    return true;
+  }
 
   //! Return the flag indicating whether method supports linear inequalities
-  bool supports_linear_inequality() override { return true; }
+  bool supports_linear_inequality() override
+  {
+    return true;
+  }
 
   //! Return the flag indicating whether method supports nonlinear equality constrinats
-  bool supports_nonlinear_equality() override { return true; }
+  bool supports_nonlinear_equality() override
+  {
+    return true;
+  }
 
   //! Return the flag indicating whether method supports nonlinear inequality constrinats
-  bool supports_nonlinear_inequality() override { return true; }
-
-  //! Return format for nonlinear inequality constraints
-  Dakota::NONLINEAR_EQUALITY_FORMAT nonlinear_equality_format() override { 
-    return Dakota::NONLINEAR_EQUALITY_FORMAT::TRUE_EQUALITY; 
+  bool supports_nonlinear_inequality() override
+  {
+    return true;
   }
 
   //! Return format for nonlinear inequality constraints
-  Dakota::NONLINEAR_INEQUALITY_FORMAT nonlinear_inequality_format() override { 
+  Dakota::NONLINEAR_EQUALITY_FORMAT nonlinear_equality_format() override
+  {
+    return Dakota::NONLINEAR_EQUALITY_FORMAT::TRUE_EQUALITY;
+  }
+
+  //! Return format for nonlinear inequality constraints
+  Dakota::NONLINEAR_INEQUALITY_FORMAT nonlinear_inequality_format() override
+  {
     return Dakota::NONLINEAR_INEQUALITY_FORMAT::TWO_SIDED;
-    //return NONLINEAR_INEQUALITY_FORMAT::ONE_SIDED_UPPER; 
+    //return NONLINEAR_INEQUALITY_FORMAT::ONE_SIDED_UPPER;
   }
-
 };
 
 #endif

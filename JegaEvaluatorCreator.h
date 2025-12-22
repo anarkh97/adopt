@@ -1,17 +1,17 @@
 #ifndef _JEGA_EVALUATOR_CREATOR_H_
 #define _JEGA_EVALUATOR_CREATOR_H_
 
-#include<../Utilities/include/JEGAConfig.hpp>
-#include<../Utilities/include/Logging.hpp>
+#include <../Utilities/include/JEGAConfig.hpp>
+#include <../Utilities/include/Logging.hpp>
 
-#include<GeneticAlgorithm.hpp>
-#include<GeneticAlgorithmEvaluator.hpp>
-#include<../FrontEnd/Core/include/EvaluatorCreator.hpp>
+#include <GeneticAlgorithm.hpp>
+#include <GeneticAlgorithmEvaluator.hpp>
+#include <../FrontEnd/Core/include/EvaluatorCreator.hpp>
 
 // Include the main optimizer class to get Model and other dakota things.
-#include<DakotaOptimizer.hpp>
+#include <DakotaOptimizer.hpp>
 
-#include<AdaptiveDecisionMaker.h>
+#include <AdaptiveDecisionMaker.h>
 
 /************************************************
  * JegaEvaluatorCreator is a utility class that 
@@ -21,26 +21,24 @@
  * procedure required by JEGA::FrontEnd.
  ***********************************************/
 
-class JegaEvaluatorCreator : public JEGA::FrontEnd::EvaluatorCreator {
+class JegaEvaluatorCreator : public JEGA::FrontEnd::EvaluatorCreator
+{
 
-  Dakota::Model &sim_model;
-  Dakota::Model &error_model;
+  Dakota::Model         &sim_model;
+  Dakota::Model         &error_model;
   AdaptiveDecisionMaker &decision_maker;
 
 public:
-
   //! Constructor
-  JegaEvaluatorCreator(Dakota::Model& sim_model, 
-                       Dakota::Model& error_model,
-                       AdaptiveDecisionMaker& decision_maker);
+  JegaEvaluatorCreator(Dakota::Model &sim_model, Dakota::Model &error_model,
+                       AdaptiveDecisionMaker &decision_maker);
 
   //! Destructor
-  ~JegaEvaluatorCreator() { };
+  ~JegaEvaluatorCreator() {};
 
   //! Called internally by JEGA libarary. Overriden to pass Dakota Model
-  JEGA::Algorithms::GeneticAlgorithmEvaluator*
-  CreateEvaluator(JEGA::Algorithms::GeneticAlgorithm& alg) override;
-
+  JEGA::Algorithms::GeneticAlgorithmEvaluator *
+  CreateEvaluator(JEGA::Algorithms::GeneticAlgorithm &alg) override;
 };
 
 #endif
