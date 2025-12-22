@@ -1085,9 +1085,6 @@ bool AdaptiveJegaOptimizer::CorrectBestDesigns(GeneticAlgorithm &the_ga)
 {
 
   const string &name = the_ga.GetName();
-  JEGALOG_II(the_ga.GetLogger(), ldebug(), this,
-             ostream_entry(lquiet(), "JEGA Front End: " + name
-                                       + ": Correcting best desings."))
 
   //---------------------------------------------------------------------------
   // Get the best designs
@@ -1131,12 +1128,22 @@ bool AdaptiveJegaOptimizer::CorrectBestDesigns(GeneticAlgorithm &the_ga)
   }
   true_eval_candidates.resize(num_approx_candidates);
 
-  //! Create a new group
-  DesignGroup reeval_group(target, true_eval_candidates);
+  if (num_approx_candidates == 0)
+  {
+    return true;
+  }
 
   //---------------------------------------------------------------------------
   // Re-evaluate best designs
   //---------------------------------------------------------------------------
+  JEGALOG_II(the_ga.GetLogger(), ldebug(), this,
+             ostream_entry(lquiet(), "JEGA Front End: " + name
+                                       + ": Correcting best desings."))
+  //! Create a new group
+  DesignGroup reeval_group(target, true_eval_candidates);
+
+  //! Get the evaluator ... This is a hack to make sure we 
+  //! run "True" evaluations
   shared_ptr<JegaEvaluator> evaluator(0x0);
   try
   {
