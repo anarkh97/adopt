@@ -10,7 +10,6 @@
 // Eigen includes.
 #include <Eigen/Dense>
 
-typedef std::map<int, Dakota::String> IntStringMap;
 
 /************************************************
  *
@@ -26,10 +25,9 @@ class AdaptiveDecisionMaker
   //! Problem description
   const Dakota::ProblemDescDB &problem_db;
 
-  //! Database containers
+  //! Database containers (only store true evaluation data)
   Dakota::IntRealVectorMap id2var;   // internal var.
   Dakota::IntRealMap       id2error; // internal var.
-  IntStringMap             id2type;  // internal var.
 
   //! Gaussian regression model --- operates on approximation errors.
   dakota::surrogates::GaussianProcess gp_model;

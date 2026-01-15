@@ -35,7 +35,7 @@ double EuclideanDistance(const RealVector &v1, const RealVector &v2)
 //------------------------------------------------------------------------------
 
 AdaptiveDecisionMaker::AdaptiveDecisionMaker(const ProblemDescDB &problem_db_)
-    : problem_db(problem_db_), id2var(), id2type(), id2error(),
+    : problem_db(problem_db_), id2var(), id2error(),
       ready_to_predict(false), num_train_calls(0)
 {
 
@@ -199,14 +199,13 @@ String AdaptiveDecisionMaker::GetEvaluationType(const RealVector &cont_vars)
     return into;
   }
 
-  //! Check if there is an existing decision for this variable
+  //! Check if this variable corresponds to true evaluation 
   IntRealVectorMap::const_iterator       it = id2var.begin();
   const IntRealVectorMap::const_iterator e  = id2var.end();
   for (; it != e; ++it)
   {
     if (it->second == cont_vars)
     {
-      into = id2type[it->first];
       return into;
     }
   }
@@ -222,14 +221,13 @@ String AdaptiveDecisionMaker::GetEvaluationType(const RealVector &cont_vars)
   double standard_dev = std::sqrt(query_variance(0));
 
   if (3 * standard_dev <= 1e-2 /*6.5e-3*/ // 99.7% CI
-      && query_prediction(0) <= 1.3e-2 /*5e-2*/)
+      && std::abs(query_prediction(0)) <= 1.3e-2 /*5e-2*/)
   {
     into = "APPROX";
   }
 
   if (verbose > 1)
   {
-    //cont_vars.print(Cout) <<
     Cout << "\n";
     Cout << "variables  : " << query << "\n";
     Cout << "uncertainty: " << standard_dev << "\n";
@@ -253,10 +251,12 @@ void AdaptiveDecisionMaker::RecordEvaluationError(const int         eval_id,
   //! Check if variables match.  This is done to ensure error values stored
   //! in id2error are mapped to expected continuous variables stored in
   //! id2var.
+  //! (AN) Alternative is to use a map with RealVector keys. But, since
+  //! RealVector does not have a "<" operator, they can not be used as keys.
   if (cont_vars != stored_vars)
   {
     Cerr << "Adaptive SOGA Error: Trying to map error values "
-         << "for unknown design variables.\n";
+         << "for unknown design variables (with \"TRUE\" evaluation).\n";
     abort_handler(METHOD_ERROR);
   }
 
@@ -269,6 +269,20 @@ void AdaptiveDecisionMaker::RecordEvaluationDecision(
   int eval_id, const RealVector &cont_vars, const String &eval_type)
 {
 
+  if (eval_type == "ERROR")
+  {
+    Cout << "Adaptive SOGA Warning: Error evaluations are not stored in "
+         << "the decision maker. Ignoring...\n";
+    return;
+  }
+  if (eval_type == "APPROX")
+  {
+    Cout << "Adaptive SOGA Warning: Approximate evaluations are not stored in "
+         << "the decision maker. Ignoring...\n";
+    return;
+  }
+
+  // Store new true evaluations
   if (eval_type == "TRUE")
   {
     //! First check if evaluation id has already been mapped or not.
@@ -287,30 +301,9 @@ void AdaptiveDecisionMaker::RecordEvaluationDecision(
       id2var[eval_id] = cont_vars;
     }
   }
-  else if (eval_type == "ERROR")
-  {
-    Cout << "Adaptive SOGA Warning: Error evaluations are not stored in "
-         << "the decision maker. Ignoring...\n";
-    return;
-  }
-  else if (eval_type != "APPROX")
-  {
-    Cerr << "Adaptive SOGA Error: I do not understand evaluation type "
-         << eval_type << ".\n";
-    abort_handler(METHOD_ERROR);
-  }
 
-  //! Store the evaluation ids for only for "TRUE" and "APPROX" types
-  IntStringMap::iterator it = id2type.find(eval_id);
-  if (it != id2type.end() and verbose > 1)
-  {
-    Cout << "Adaptive SOGA Warning: Duplicate evaluation ID " << eval_id
-         << ", previously mapped to evalutation type: " << it->second
-         << ".Skipping ...\n";
-    return;
-  }
+  // Do nothing if eval type is anything other than "TRUE", "APPROX", or "ERROR".
 
-  id2type[eval_id] = eval_type;
 }
 
 //------------------------------------------------------------------------------
@@ -354,6 +347,7 @@ void AdaptiveDecisionMaker::LoadGaussianProcesssOptions()
   options.set("num restarts", 20);
 
   gp_model.set_options(options);
+
 }
 
 //------------------------------------------------------------------------------
@@ -497,6 +491,7 @@ bool AdaptiveDecisionMaker::BuildGaussianProcessModel(const MatrixXd &samples,
   //loss = std::sqrt(numerator/denominator); // root mean squared.
 
   return true;
+
 }
 
 //------------------------------------------------------------------------------
@@ -506,6 +501,7 @@ void AdaptiveDecisionMaker::CrossValidateGausssianModel() const
 
   // cross-validation
   // Eigen::VectorXd cross_val_metrics = gp_model.cross_validate(...);
+
 }
 
 //------------------------------------------------------------------------------

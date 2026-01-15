@@ -8,6 +8,10 @@
 #include <../Utilities/include/DesignGroup.hpp>
 #include <../Utilities/include/ConstraintInfo.hpp>
 
+// JEGA Core includes.
+#include <GeneticAlgorithmSelector.hpp>
+#include <GeneticAlgorithmFitnessAssessor.hpp>
+
 using namespace std;
 using namespace Dakota;
 using namespace JEGA::Logging;
@@ -384,6 +388,7 @@ bool JegaEvaluator::Evaluate(DesignGroup &group)
                 "Adaptive JEGA Error: "
                 "Something is wrong. Found an incorrect \"SWITCH\" value.\n"))
     }
+
   }
   tr_designs.resize(tr_des_size);
   ap_designs.resize(ap_des_size);
@@ -398,7 +403,83 @@ bool JegaEvaluator::Evaluate(DesignGroup &group)
   bool t_ret = EvaluationLoop(t_group, "TRUE");
   bool a_ret = EvaluationLoop(a_group, "APPROX");
 
-  bool ret = t_ret && a_ret;
+  //---------------------------------------------------------------------------
+  // Re-evaluate best designs w/ "APPROX" tags
+  //---------------------------------------------------------------------------
+  bool r_ret = true;
+  // TODO: AN: Should be a user option later.
+  if (true)
+  {
+
+    // Calculate fitness of the population and offspring.
+    // Note, the group variable (in the current context) comprises
+    // of the offspring designs.
+    GeneticAlgorithm    &algorithm  = GetAlgorithm();
+    DesignGroup         &population = algorithm.GetPopulation();
+    const FitnessRecord *fitness    = algorithm.DoFitnessAssessment();
+
+    DesignGroupVector gpvec;
+    gpvec.reserve(2);
+
+    if (population.SizeOF() > 0)
+      gpvec.push_back(&population);
+    if (group.SizeOF() > 0)
+      gpvec.push_back(&group);
+
+    // TODO: (AN) Here we should correct numFinalSolutions (DAKOTA variable)
+    // But, I currently do not have a way to extract this information directly (JEGA).
+    int num_final_solutions = 1;
+    int total_designs       = gpvec.GetTotalDesignCount();
+
+    vector<Design *> all_designs;
+    all_designs.reserve(total_designs);
+    for (int i = 0; i < gpvec.size(); ++i)
+    {
+      DesignDVSortSet::const_iterator       itv(gpvec[i]->BeginDV());
+      const DesignDVSortSet::const_iterator ev(gpvec[i]->EndDV());
+      for (; itv != ev; ++itv)
+        all_designs.push_back(*itv);
+    }
+
+    std::sort(all_designs.begin(), all_designs.end(),
+              GeneticAlgorithmSelector::FitnessPred(*fitness));
+
+    vector<Design *> reeval;
+    for (int i = 0; i < num_final_solutions; ++i)
+    {
+      Design &c_design = *all_designs[i];
+
+      // See if this design was approx evaluation.
+      if (a_group.ContainsDesign(c_design))
+      {
+        c_design.SetEvaluated(false);
+        c_design.SetIllconditioned(false);
+        reeval.push_back(&c_design);
+      }
+    }
+
+    if (!reeval.empty())
+    {
+      JEGALOG_II(
+        GetLogger(), ldebug(), this,
+        text_entry(ldebug(), GetName() + ": Performing re-evaluation."))
+
+      DesignGroup reeval_group(target, reeval);
+      r_ret = EvaluationLoop(reeval_group, "TRUE");
+    }
+
+  }
+
+  bool ret = t_ret && a_ret && r_ret;
+
+  //---------------------------------------------------------------------------
+  // Perform Error Evaluations
+  //---------------------------------------------------------------------------
+  if (ret && decision_maker.NeedToComputeErrors())
+  {
+    ErrorEvaluationLoop();
+    decision_maker.Train();
+  }
 
   return ret;
 }
