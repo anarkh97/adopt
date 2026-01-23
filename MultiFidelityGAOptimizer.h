@@ -1,0 +1,157 @@
+#ifndef _MULTI_FIDELITY_GA_OPTIMIZER_H_
+#define _MULTI_FIDELITY_GA_OPTIMIZER_H_
+
+//! Optimization related headers
+#include <JEGAOptimizer.hpp> // add JEGA includes and forward declares.
+
+//! Internal details
+#include <MFGAEvaluatorCreator.h>
+#include <MFGAEvaluator.h>
+#include <MFGADriver.h>
+//! Surrogate model related headers
+#include <AdaptiveDecisionMaker.h>
+
+/*****************************************************
+ *  This class extends JEGAOptimizer, Dakota's 
+ *  implementation of John Eddy's Genetic Algorithm 
+ *  (JEGA) library. We modify its optimization loop to 
+ *  integrate an Adaptive Decision Model based on 
+ *  Gaussian Process. This model predicts whether 
+ *  high-fidelity fluid dynamics simulations (M2C) are 
+ *  necessary or if simpler interpolation estimates 
+ *  (FEST) will suffice. Note that Dakota::JEGAOptimizer's 
+ *  Evaluator, Driver, and EvaluatorCreator classes 
+ *  along with ParameterDatabase variables are private 
+ *  and inaccessible here. Hence, we do not directly 
+ *  derive from JEGAOptimizer but refactor most of its 
+ *  functionality.
+ *****************************************************/
+
+namespace MultiFidelityOptimizer {
+
+class MultiFidelityGAOptimizer : public Dakota::Optimizer
+{
+
+  std::shared_ptr<JEGA::Utilities::ParameterDatabase> param_db;
+  std::shared_ptr<detail::MFGAEvaluatorCreator>               eval_creator;
+  std::shared_ptr<AdaptiveDecisionMaker>              decision_maker;
+
+  Dakota::VariablesArray _initPts;
+
+public:
+  //! Default constructor
+  MultiFidelityGAOptimizer(Dakota::ProblemDescDB         &prob_db,
+                        std::shared_ptr<Dakota::Model> sim_model,
+                        std::shared_ptr<Dakota::Model> err_model);
+
+  //! Default Destructor -- Calls ~Optimizer automatically
+  ~MultiFidelityGAOptimizer() override;
+
+  //! Interface to Dakota's core_run
+  void core_run() override;
+
+  //! Note we can return multiple best solutions even in the case of SOGA.
+  bool returns_multiple_points() const override
+  {
+    return true;
+  };
+
+private:
+  //! Custom methods
+  //bool CorrectBestDesigns(JEGA::Algorithms::GeneticAlgorithm &the_ga);
+  //void ExecuteErrorCalculations(JEGA::Algorithms::GeneticAlgorithm &the_ga);
+
+  //! JEGA related methods
+  void LoadParameterDatabase();
+  void LoadAlgorithmConfig(JEGA::FrontEnd::AlgorithmConfig &config);
+  void LoadProblemConfig(JEGA::FrontEnd::ProblemConfig &config);
+  void LoadDesignVariables(JEGA::FrontEnd::ProblemConfig &config);
+  void LoadObjectiveFunctions(JEGA::FrontEnd::ProblemConfig &config);
+  void LoadConstraints(JEGA::FrontEnd::ProblemConfig &config);
+
+  JEGA::DoubleMatrix
+  ToDoubleMatrix(const Dakota::VariablesArray &variables) const;
+
+  //! Dakota related methods
+  //! MOGA functionality has been removed for now.
+  void GetBestSOSolutions(
+    const JEGA::Utilities::DesignOFSortSet   &from,
+    const JEGA::Algorithms::GeneticAlgorithm &ga,
+    std::multimap<Dakota::RealRealPair, JEGA::Utilities::Design *> &);
+
+  void LoadDakotaResponses(const JEGA::Utilities::Design &from,
+                           Dakota::Variables             &vars,
+                           Dakota::Response              &resp) const;
+}; // MultiFidelityGAOptimizer
+
+/*****************************************************
+ *  This class derives from TraitsBase. Dakota 
+ *  uses this class to verify the optimizer's 
+ *  capabilities, such as support for 
+ *  non-linear constraints and its types. Hre as we 
+ *  want to mimic JEGATraits as much as possible. 
+ *****************************************************/
+
+class MultiFidelityGATraits : public Dakota::TraitsBase
+{
+
+public:
+  //! Default constructor
+  MultiFidelityGATraits() {};
+
+  //! Destructor
+  virtual ~MultiFidelityGATraits() {};
+
+  //! This is needed to handle constraints
+  inline static double noValue()
+  {
+    return std::numeric_limits<Dakota::Real>::max();
+  }
+
+  //! Return the flag indicating whether method supports continuous variables
+  bool supports_continuous_variables() override
+  {
+    return true;
+  }
+
+  //! Return the flag indicating whether method supports linear equalities
+  bool supports_linear_equality() override
+  {
+    return true;
+  }
+
+  //! Return the flag indicating whether method supports linear inequalities
+  bool supports_linear_inequality() override
+  {
+    return true;
+  }
+
+  //! Return the flag indicating whether method supports nonlinear equality constrinats
+  bool supports_nonlinear_equality() override
+  {
+    return true;
+  }
+
+  //! Return the flag indicating whether method supports nonlinear inequality constrinats
+  bool supports_nonlinear_inequality() override
+  {
+    return true;
+  }
+
+  //! Return format for nonlinear inequality constraints
+  Dakota::NONLINEAR_EQUALITY_FORMAT nonlinear_equality_format() override
+  {
+    return Dakota::NONLINEAR_EQUALITY_FORMAT::TRUE_EQUALITY;
+  }
+
+  //! Return format for nonlinear inequality constraints
+  Dakota::NONLINEAR_INEQUALITY_FORMAT nonlinear_inequality_format() override
+  {
+    return Dakota::NONLINEAR_INEQUALITY_FORMAT::TWO_SIDED;
+    //return NONLINEAR_INEQUALITY_FORMAT::ONE_SIDED_UPPER;
+  }
+}; // MultiFidelityGATraits
+
+}; // MultiFidelityOptimizer
+
+#endif
