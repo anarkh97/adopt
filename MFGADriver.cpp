@@ -9,9 +9,11 @@ using namespace JEGA::Algorithms;
 
 //-----------------------------------------------------------------------------
 
-namespace MultiFidelityOptimizer {
+namespace MultiFidelityOptimizer
+{
 
-namespace detail {
+namespace detail
+{
 
 MFGADriver::MFGADriver(const ProblemConfig &config)
     : JEGA::FrontEnd::Driver(config)
@@ -19,9 +21,9 @@ MFGADriver::MFGADriver(const ProblemConfig &config)
   EDDY_FUNC_DEBUGSCOPE
 }
 
-}
+} // namespace detail
 
-}
+} // namespace MultiFidelityOptimizer
 
 //-----------------------------------------------------------------------------
 

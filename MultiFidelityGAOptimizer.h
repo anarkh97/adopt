@@ -27,13 +27,14 @@
  *  functionality.
  *****************************************************/
 
-namespace MultiFidelityOptimizer {
+namespace MultiFidelityOptimizer
+{
 
 class MultiFidelityGAOptimizer : public Dakota::Optimizer
 {
 
   std::shared_ptr<JEGA::Utilities::ParameterDatabase> param_db;
-  std::shared_ptr<detail::MFGAEvaluatorCreator>               eval_creator;
+  std::shared_ptr<detail::MFGAEvaluatorCreator>       eval_creator;
   std::shared_ptr<AdaptiveDecisionMaker>              decision_maker;
 
   Dakota::VariablesArray _initPts;
@@ -41,8 +42,8 @@ class MultiFidelityGAOptimizer : public Dakota::Optimizer
 public:
   //! Default constructor
   MultiFidelityGAOptimizer(Dakota::ProblemDescDB         &prob_db,
-                        std::shared_ptr<Dakota::Model> sim_model,
-                        std::shared_ptr<Dakota::Model> err_model);
+                           std::shared_ptr<Dakota::Model> sim_model,
+                           std::shared_ptr<Dakota::Model> err_model);
 
   //! Default Destructor -- Calls ~Optimizer automatically
   ~MultiFidelityGAOptimizer() override;
@@ -97,10 +98,10 @@ class MultiFidelityGATraits : public Dakota::TraitsBase
 
 public:
   //! Default constructor
-  MultiFidelityGATraits() {};
+  MultiFidelityGATraits(){};
 
   //! Destructor
-  virtual ~MultiFidelityGATraits() {};
+  virtual ~MultiFidelityGATraits(){};
 
   //! This is needed to handle constraints
   inline static double noValue()
@@ -152,6 +153,6 @@ public:
   }
 }; // MultiFidelityGATraits
 
-}; // MultiFidelityOptimizer
+}; // namespace MultiFidelityOptimizer
 
 #endif

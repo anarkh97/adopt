@@ -26,9 +26,11 @@
  * but adds the Gaussian process model.
  ****************************************************/
 
-namespace MultiFidelityOptimizer {
+namespace MultiFidelityOptimizer
+{
 
-namespace detail {
+namespace detail
+{
 
 class MFGAEvaluator : public JEGA::Algorithms::GeneticAlgorithmEvaluator
 {
@@ -88,7 +90,6 @@ public:
   bool Evaluate(JEGA::Utilities::Design &des) override;
 
 protected:
-
   //! Here we only deal w/ continuous design variables.
   void SeparateVariables(const JEGA::Utilities::Design &from,
                          Dakota::RealVector            &into_cont) const;
@@ -122,11 +123,10 @@ private:
 
   //! Should not be used.
   MFGAEvaluator(JEGA::Algorithms::GeneticAlgorithm &algorithm);
-
 };
 
-} // detail
+} // namespace detail
 
-} // MultiFidelityOptimizer
+} // namespace MultiFidelityOptimizer
 
 #endif

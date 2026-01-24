@@ -7,9 +7,11 @@ using namespace Dakota;
 using namespace JEGA::FrontEnd;
 using namespace JEGA::Algorithms;
 
-namespace MultiFidelityOptimizer {
+namespace MultiFidelityOptimizer
+{
 
-namespace detail {
+namespace detail
+{
 
 //-----------------------------------------------------------------------------
 

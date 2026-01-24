@@ -19,9 +19,11 @@ using namespace eddy::utilities;
 using namespace JEGA::Utilities;
 using namespace JEGA::Algorithms;
 
-namespace MultiFidelityOptimizer {
+namespace MultiFidelityOptimizer
+{
 
-namespace detail {
+namespace detail
+{
 
 //-----------------------------------------------------------------------------
 
@@ -350,7 +352,7 @@ bool MFGAEvaluator::Evaluate(DesignGroup &group)
 
   //! Return early for first (or zeroth) generation
   // TODO: Could be user option later.
-  if (generation_number <= 1) 
+  if (generation_number <= 1)
   {
     bool ret = EvaluationLoop(group, "TRUE");
 
@@ -409,11 +411,12 @@ bool MFGAEvaluator::Evaluate(DesignGroup &group)
     }
     else
     {
-      JEGALOG_II_G_F(this, text_entry(lfatal(),
+      JEGALOG_II_G_F(
+        this, text_entry(
+                lfatal(),
                 "Adaptive JEGA Error: "
                 "Something is wrong. Found an incorrect \"SWITCH\" value.\n"))
     }
-
   }
   tr_designs.resize(tr_des_size);
   ap_designs.resize(ap_des_size);
@@ -442,17 +445,20 @@ bool MFGAEvaluator::Evaluate(DesignGroup &group)
     DesignGroup         &population = algorithm.GetPopulation();
     const FitnessRecord *fitness(algorithm.DoFitnessAssessment());
 
-    JEGAIFLOG_II_F(fitness == 0x0, algorithm.GetLogger(), this, 
-      text_entry(lfatal(), "Could not recover population fitness (required"
-                           " for design re-evaluations).\n"))
+    JEGAIFLOG_II_F(fitness == 0x0, algorithm.GetLogger(), this,
+                   text_entry(lfatal(),
+                              "Could not recover population fitness (required"
+                              " for design re-evaluations).\n"))
 
     DesignGroupVector gpvec;
     gpvec.reserve(2);
-    if (population.SizeOF() > 0) gpvec.push_back(&population);
-    if (group.SizeOF() > 0) gpvec.push_back(&group);
+    if (population.SizeOF() > 0)
+      gpvec.push_back(&population);
+    if (group.SizeOF() > 0)
+      gpvec.push_back(&group);
 
     // TODO: (AN) Here we should correct numFinalSolutions (DAKOTA variable)
-    // But, I currently do not have a way to extract this 
+    // But, I currently do not have a way to extract this
     // information directly (JEGA).
     size_t num_final_solutions = 1;
     size_t total_designs       = gpvec.GetTotalDesignCount();
@@ -487,13 +493,11 @@ bool MFGAEvaluator::Evaluate(DesignGroup &group)
       }
     }
 
-    JEGALOG_II(
-      GetLogger(), ldebug(), this,
-      text_entry(ldebug(), GetName() + ": Performing re-evaluation."))
+    JEGALOG_II(GetLogger(), ldebug(), this,
+               text_entry(ldebug(), GetName() + ": Performing re-evaluation."))
 
     DesignGroup reeval_group(target, reeval);
     r_ret = EvaluationLoop(reeval_group, "TRUE");
-
   }
 
   bool ret = t_ret && a_ret && r_ret;
@@ -508,7 +512,6 @@ bool MFGAEvaluator::Evaluate(DesignGroup &group)
   }
 
   return ret;
-
 }
 
 //-----------------------------------------------------------------------------
@@ -614,7 +617,7 @@ bool MFGAEvaluator::EvaluationLoop(DesignGroup &group, String switch_val)
 
   JEGALOG_II(GetLogger(), ldebug(), this,
              text_entry(ldebug(), GetName() + ": Performing group evaluation ("
-               + switch_val + ")."))
+                                    + switch_val + ")."))
 
   //---------------------------------------------------------------------------
   // Handle trivial cases
@@ -810,6 +813,6 @@ bool MFGAEvaluator::EvaluationLoop(DesignGroup &group, String switch_val)
 
 //-----------------------------------------------------------------------------
 
-} // detail
+} // namespace detail
 
-} // MultiFidelityOptimizer
+} // namespace MultiFidelityOptimizer

@@ -49,7 +49,8 @@ using namespace JEGA::Algorithms;
 
 using namespace MultiFidelityOptimizer::detail;
 
-namespace MultiFidelityOptimizer {
+namespace MultiFidelityOptimizer
+{
 
 //-----------------------------------------------------------------------------
 
@@ -64,10 +65,11 @@ template <typename T> string asstring(const T &val)
 //-----------------------------------------------------------------------------
 
 MultiFidelityGAOptimizer::MultiFidelityGAOptimizer(ProblemDescDB    &prob_db,
-                                             shared_ptr<Model> sim_model,
-                                             shared_ptr<Model> err_model)
-    : Optimizer(prob_db, sim_model,
-                std::shared_ptr<MultiFidelityGATraits>(new MultiFidelityGATraits())),
+                                                   shared_ptr<Model> sim_model,
+                                                   shared_ptr<Model> err_model)
+    : Optimizer(
+      prob_db, sim_model,
+      std::shared_ptr<MultiFidelityGATraits>(new MultiFidelityGATraits())),
       param_db(nullptr), eval_creator(nullptr), decision_maker(nullptr)
 {
 
@@ -111,23 +113,23 @@ MultiFidelityGAOptimizer::MultiFidelityGAOptimizer(ProblemDescDB    &prob_db,
     LogLevel jega_level;
     switch (dakota_level)
     {
-      case SILENT_OUTPUT:
-        jega_level = lsilent();
-        break;
-      case NORMAL_OUTPUT:
-        jega_level = lnormal();
-        break;
-      case DEBUG_OUTPUT:
-        jega_level = ldebug();
-        break;
-      case QUIET_OUTPUT:
-        jega_level = lquiet();
-        break;
-      case VERBOSE_OUTPUT:
-        jega_level = lverbose();
-        break;
-      default:
-        jega_level = ldefault();
+    case SILENT_OUTPUT:
+      jega_level = lsilent();
+      break;
+    case NORMAL_OUTPUT:
+      jega_level = lnormal();
+      break;
+    case DEBUG_OUTPUT:
+      jega_level = ldebug();
+      break;
+    case QUIET_OUTPUT:
+      jega_level = lquiet();
+      break;
+    case VERBOSE_OUTPUT:
+      jega_level = lverbose();
+      break;
+    default:
+      jega_level = ldefault();
     }
 
     const bool jega_register_signals = false;
@@ -166,7 +168,6 @@ MultiFidelityGAOptimizer::MultiFidelityGAOptimizer(ProblemDescDB    &prob_db,
 //! Smart pointers deleted automatically
 MultiFidelityGAOptimizer::~MultiFidelityGAOptimizer()
 {
-  
 }
 
 //-----------------------------------------------------------------------------
@@ -267,10 +268,10 @@ void MultiFidelityGAOptimizer::core_run()
 
   DesignOFSortSet bests(driver.PerformIterations(ga_algorithm));
 
-  JEGALOG_II_G(lverbose(), this,
+  JEGALOG_II_G(
+    lverbose(), this,
     ostream_entry(lverbose(), name + ": algorithm execution completed. ")
-      << bests.size() << " solutions found. Passing them back to DAKOTA."
-    )
+      << bests.size() << " solutions found. Passing them back to DAKOTA.")
 
   //---------------------------------------------------------------------------
   // Post-processing for DAKOTA output
@@ -967,8 +968,8 @@ void MultiFidelityGAOptimizer::GetBestSOSolutions(
 
 //! Copied from JEGAOptimizer::LoadDakotaResponses()
 void MultiFidelityGAOptimizer::LoadDakotaResponses(const Design &from,
-                                                Variables    &vars,
-                                                Response     &resp) const
+                                                   Variables    &vars,
+                                                   Response     &resp) const
 {
 
   size_t num_cv   = vars.cv();
@@ -1127,4 +1128,4 @@ void MultiFidelityGAOptimizer::LoadDakotaResponses(const Design &from,
 
 //-----------------------------------------------------------------------------
 
-} // MultiFidelityOptimizer
+} // namespace MultiFidelityOptimizer

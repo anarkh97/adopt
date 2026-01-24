@@ -21,9 +21,11 @@
  * procedure required by JEGA::FrontEnd.
  ***********************************************/
 
-namespace MultiFidelityOptimizer {
+namespace MultiFidelityOptimizer
+{
 
-namespace detail {
+namespace detail
+{
 
 class MFGAEvaluatorCreator : public JEGA::FrontEnd::EvaluatorCreator
 {
@@ -38,15 +40,15 @@ public:
                        AdaptiveDecisionMaker &decision_maker);
 
   //! Destructor
-  ~MFGAEvaluatorCreator() {};
+  ~MFGAEvaluatorCreator(){};
 
   //! Called internally by JEGA libarary. Overriden to pass Dakota Model
   JEGA::Algorithms::GeneticAlgorithmEvaluator *
   CreateEvaluator(JEGA::Algorithms::GeneticAlgorithm &alg) override;
 };
 
-} // detail
+} // namespace detail
 
-} // MultiFidelityOptimizer
+} // namespace MultiFidelityOptimizer
 
 #endif

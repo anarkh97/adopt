@@ -16,6 +16,9 @@ using namespace dakota;
 using namespace dakota::util;
 using namespace dakota::surrogates;
 
+namespace MultiFidelityOptimizer
+{
+
 //------------------------------------------------------------------------------
 //! Helper function
 double EuclideanDistance(const RealVector &v1, const RealVector &v2)
@@ -35,8 +38,8 @@ double EuclideanDistance(const RealVector &v1, const RealVector &v2)
 //------------------------------------------------------------------------------
 
 AdaptiveDecisionMaker::AdaptiveDecisionMaker(const ProblemDescDB &problem_db_)
-    : problem_db(problem_db_), id2var(), id2error(),
-      ready_to_predict(false), num_train_calls(0)
+    : problem_db(problem_db_), id2var(), id2error(), ready_to_predict(false),
+      num_train_calls(0)
 {
 
   short dakota_level = problem_db.get_short("method.output");
@@ -44,20 +47,20 @@ AdaptiveDecisionMaker::AdaptiveDecisionMaker(const ProblemDescDB &problem_db_)
   //!     We follow the same convention.
   switch (dakota_level)
   {
-    case SILENT_OUTPUT:
-    case QUIET_OUTPUT:
-      verbose = 0; /* no output */
-      break;
-    case NORMAL_OUTPUT:
-      verbose = 1; /* normal output */
-      break;
-    case VERBOSE_OUTPUT:
-    case DEBUG_OUTPUT:
-      verbose = 2; /* maximum output */
-      break;
-    default:
-      verbose = 0;
-      break;
+  case SILENT_OUTPUT:
+  case QUIET_OUTPUT:
+    verbose = 0; /* no output */
+    break;
+  case NORMAL_OUTPUT:
+    verbose = 1; /* normal output */
+    break;
+  case VERBOSE_OUTPUT:
+  case DEBUG_OUTPUT:
+    verbose = 2; /* maximum output */
+    break;
+  default:
+    verbose = 0;
+    break;
   }
 
   String options_file = problem_db.get_string("method.advanced_options_file");
@@ -190,22 +193,43 @@ String AdaptiveDecisionMaker::GetEvaluationType(const RealVector &cont_vars)
   //! Return when databse is empty.
   if (id2var.empty())
   {
+    if (verbose > 1)
+    {
+      Cout << "\n";
+      Cout << "Adaptive SOGA Debug: True database is empty. Collecting ";
+      Cout << "data points. Evaluation type set to TRUE.";
+      Cout << "\n";
+    }
     return into;
   }
 
   //! Return when GP model is not ready.
   if (!ready_to_predict)
   {
+    if (verbose > 1)
+    {
+      Cout << "\n";
+      Cout << "Adaptive SOGA Debug: Decision maker not ready to predict.";
+      Cout << "Collecting data points. Evaluation type set to TRUE.";
+      Cout << "\n";
+    }
     return into;
   }
 
-  //! Check if this variable corresponds to true evaluation 
+  //! Check if this variable corresponds to true evaluation
   IntRealVectorMap::const_iterator       it = id2var.begin();
   const IntRealVectorMap::const_iterator e  = id2var.end();
   for (; it != e; ++it)
   {
     if (it->second == cont_vars)
     {
+      if (verbose > 1)
+      {
+        Cout << "\n";
+        Cout << "Adaptive SOGA Debug: Found a matching design in the";
+        Cout << "true evaluation database. Evaluation type set to TRUE.";
+        Cout << "\n";
+      }
       return into;
     }
   }
@@ -303,7 +327,6 @@ void AdaptiveDecisionMaker::RecordEvaluationDecision(
   }
 
   // Do nothing if eval type is anything other than "TRUE", "APPROX", or "ERROR".
-
 }
 
 //------------------------------------------------------------------------------
@@ -347,7 +370,6 @@ void AdaptiveDecisionMaker::LoadGaussianProcesssOptions()
   options.set("num restarts", 20);
 
   gp_model.set_options(options);
-
 }
 
 //------------------------------------------------------------------------------
@@ -491,7 +513,6 @@ bool AdaptiveDecisionMaker::BuildGaussianProcessModel(const MatrixXd &samples,
   //loss = std::sqrt(numerator/denominator); // root mean squared.
 
   return true;
-
 }
 
 //------------------------------------------------------------------------------
@@ -501,7 +522,6 @@ void AdaptiveDecisionMaker::CrossValidateGausssianModel() const
 
   // cross-validation
   // Eigen::VectorXd cross_val_metrics = gp_model.cross_validate(...);
-
 }
 
 //------------------------------------------------------------------------------
@@ -602,3 +622,4 @@ void AdaptiveDecisionMaker::WriteCurrentModelResults(const MatrixXd &parameters,
 
 //------------------------------------------------------------------------------
 
+} // namespace MultiFidelityOptimizer

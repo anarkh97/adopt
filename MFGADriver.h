@@ -31,9 +31,11 @@
  * adaptive decision maker.
  ***********************************************/
 
-namespace MultiFidelityOptimizer {
+namespace MultiFidelityOptimizer
+{
 
-namespace detail {
+namespace detail
+{
 
 class MFGADriver : public JEGA::FrontEnd::Driver
 {
@@ -50,7 +52,7 @@ public:
   }
 
   JEGA::Utilities::DesignOFSortSet
-  PerformIterations(JEGA::Algorithms::GeneticAlgorithm* ga)
+  PerformIterations(JEGA::Algorithms::GeneticAlgorithm *ga)
   {
     return JEGA::FrontEnd::Driver::PerformIterations(ga);
   }
@@ -68,8 +70,8 @@ public:
   }
 }; // MFGADriver
 
-} // detail
+} // namespace detail
 
-}//MultiFidelityOptimizer
+} // namespace MultiFidelityOptimizer
 
 #endif

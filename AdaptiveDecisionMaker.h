@@ -10,10 +10,12 @@
 // Eigen includes.
 #include <Eigen/Dense>
 
-
 /************************************************
  *
  ***********************************************/
+
+namespace MultiFidelityOptimizer
+{
 
 class AdaptiveDecisionMaker
 {
@@ -36,7 +38,7 @@ class AdaptiveDecisionMaker
 
 public:
   AdaptiveDecisionMaker(const Dakota::ProblemDescDB &problem_db);
-  ~AdaptiveDecisionMaker() {};
+  ~AdaptiveDecisionMaker(){};
 
   //! Iterating functions
   size_t GetTrueDatabaseSize() const
@@ -119,5 +121,7 @@ AdaptiveDecisionMaker::GetEndForTrueDatabase() const
 {
   return id2var.end();
 }
+
+} // namespace MultiFidelityOptimizer
 
 #endif

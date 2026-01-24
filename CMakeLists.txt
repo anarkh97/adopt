@@ -64,10 +64,10 @@ endforeach()
 add_executable(adopt
 Main.cpp
 DakotaEnvironmentWrapper.cpp
-AdaptiveJegaOptimizer.cpp
-JegaDriver.cpp
-JegaEvaluatorCreator.cpp
-JegaEvaluator.cpp
+MultiFidelityGAOptimizer.cpp
+MFGADriver.cpp
+MFGAEvaluatorCreator.cpp
+MFGAEvaluator.cpp
 AdaptiveDecisionMaker.cpp
 )
 

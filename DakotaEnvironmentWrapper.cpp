@@ -1,5 +1,5 @@
 #include <DakotaEnvironmentWrapper.h>
-#include <AdaptiveJegaOptimizer.h>
+#include <MultiFidelityGAOptimizer.h>
 
 #include <DakotaModel.hpp>
 #include <SimulationModel.hpp>
@@ -324,8 +324,8 @@ void DakotaEnvironmentWrapper::SetupAdaptiveOptimizer()
   //---------------------------------------------------------------------------
 
   //! Assign our optimizer.
-  top_iterator.reset(
-    new AdaptiveJegaOptimizer(problem_db, sim_model, err_model));
+  top_iterator.reset(new MultiFidelityOptimizer::MultiFidelityGAOptimizer(
+    problem_db, sim_model, err_model));
 
   //! Reset communicator
   top_iterator->init_communicators(w_pl_iter);
