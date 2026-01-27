@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <MFGAEvaluator.h>
 
 // JEGAConfig.hpp should be the first include in all JEGA files.
@@ -11,6 +12,7 @@
 // JEGA Core includes.
 #include <GeneticAlgorithmSelector.hpp>
 #include <GeneticAlgorithmFitnessAssessor.hpp>
+//#include <OperatorGroups/AllOperators.hpp>
 
 using namespace std;
 using namespace Dakota;
@@ -341,14 +343,14 @@ void MFGAEvaluator::RecordErrorInDecisionMaker(
 bool MFGAEvaluator::Evaluate(DesignGroup &group)
 {
 
+  GeneticAlgorithm &algorithm         = GetAlgorithm();
+  size_t            generation_number = algorithm.GetGenerationNumber();
+
   //---------------------------------------------------------------------------
   // Handle trivial cases
   //---------------------------------------------------------------------------
   if (group.IsEmpty())
     return true;
-
-  GeneticAlgorithm &algorithm         = GetAlgorithm();
-  size_t            generation_number = algorithm.GetGenerationNumber();
 
   //! Return early for first (or zeroth) generation
   // TODO: Could be user option later.
@@ -439,16 +441,12 @@ bool MFGAEvaluator::Evaluate(DesignGroup &group)
   if (true && !a_group.IsEmpty())
   {
 
-    // Calculate fitness of the population and offspring.
-    // Note, the group variable (in the current context) comprises
-    // of the offspring designs.
-    DesignGroup         &population = algorithm.GetPopulation();
-    const FitnessRecord *fitness(algorithm.DoFitnessAssessment());
-
-    JEGAIFLOG_II_F(fitness == 0x0, algorithm.GetLogger(), this,
-                   text_entry(lfatal(),
-                              "Could not recover population fitness (required"
-                              " for design re-evaluations).\n"))
+    GeneticAlgorithmFitnessAssessor &fitness_assessor
+      = algorithm.GetOperatorSet().GetFitnessAssessor();
+    GeneticAlgorithmSelector &selector
+      = algorithm.GetOperatorSet().GetSelector();
+    DesignGroup &population
+      = algorithm.GetPopulation();
 
     DesignGroupVector gpvec;
     gpvec.reserve(2);
@@ -457,39 +455,37 @@ bool MFGAEvaluator::Evaluate(DesignGroup &group)
     if (group.SizeOF() > 0)
       gpvec.push_back(&group);
 
+    // Calculuate the fitness of previous population and current offspring group
+    const FitnessRecord *fitness = fitness_assessor.AssessFitness(gpvec);
+
+    JEGAIFLOG_II_F(fitness == 0x0, algorithm.GetLogger(), this,
+                   text_entry(lfatal(),
+                              "Could not recover population fitness (required"
+                              " for design re-evaluations).\n"))
+
     // TODO: (AN) Here we should correct numFinalSolutions (DAKOTA variable)
     // But, I currently do not have a way to extract this
     // information directly (JEGA).
     size_t num_final_solutions = 1;
-    size_t total_designs       = gpvec.GetTotalDesignCount();
+    //size_t num_total_designs   = gpvec.GetTotalDesignCount();
 
-    EDDY_ASSERT(num_final_solutions <= total_designs);
+    DesignOFSortSet iter_bests(
+      selector.SelectNBest(gpvec, num_final_solutions, *fitness));
 
-    vector<Design *> all_designs;
-    all_designs.reserve(total_designs);
-    for (size_t i = 0; i < gpvec.size(); ++i)
-    {
-      DesignOFSortSet::const_iterator       itof(gpvec[i]->BeginOF());
-      const DesignOFSortSet::const_iterator eof(gpvec[i]->EndOF());
-      for (; itof != eof; ++itof)
-        all_designs.push_back(*itof);
-    }
-
-    // AN: Remove later. Just for debugging.
-    EDDY_ASSERT(all_designs.size() == total_designs);
-
-    std::sort(all_designs.begin(), all_designs.end(),
-              GeneticAlgorithmSelector::FitnessPred(*fitness));
+    DesignOFSortSet::const_iterator       design_it(iter_bests.begin());
+    const DesignOFSortSet::const_iterator design_e(iter_bests.end());
 
     vector<Design *> reeval;
-    for (size_t i = 0; i < num_final_solutions; ++i)
+    for (; design_it != design_e; ++design_it)
     {
-      Design &c_design = *(all_designs[i]);
       // See if this design was approx evaluation.
-      if (a_group.ContainsDesign(c_design))
+      // Could use DesignGroup::ContainsDesign(**design_it) instead.
+      // However, that is not working as expected. Need to check why.
+      if (find(ap_designs.begin(), ap_designs.end(), *design_it) != ap_designs.end())
       {
-        c_design.ResetAttributes();
-        reeval.push_back(&c_design);
+        // set all bits to 0
+        (*design_it)->ResetAttributes();
+        reeval.push_back(*design_it);
       }
     }
 
@@ -498,6 +494,7 @@ bool MFGAEvaluator::Evaluate(DesignGroup &group)
 
     DesignGroup reeval_group(target, reeval);
     r_ret = EvaluationLoop(reeval_group, "TRUE");
+
   }
 
   bool ret = t_ret && a_ret && r_ret;
@@ -615,9 +612,15 @@ bool MFGAEvaluator::EvaluationLoop(DesignGroup &group, String switch_val)
 {
   EDDY_FUNC_DEBUGSCOPE
 
+  char buffer[512];
+  sprintf(buffer, "%d", (int)group.GetSize());
+  String grp_size(buffer);
   JEGALOG_II(GetLogger(), ldebug(), this,
-             text_entry(ldebug(), GetName() + ": Performing group evaluation ("
-                                    + switch_val + ")."))
+             text_entry(ldebug(), GetName()
+                                    + ": Performing group evaluation "
+                                      "for "
+                                    + grp_size + " designs (" + switch_val
+                                    + ")."))
 
   //---------------------------------------------------------------------------
   // Handle trivial cases
