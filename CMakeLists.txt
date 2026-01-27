@@ -18,9 +18,6 @@ endif()
 
 # compiler flags (turn on most of the warnings, except unused variables and parameters
 list(APPEND MY_CXX_FLAGS "-Wall -Wextra -Wno-reorder")
-list(APPEND MY_CXX_FLAGS "-Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter")
-list(APPEND MY_CXX_FLAGS "-Wno-unused-but-set-variable -Wno-dev")
-list(APPEND MY_CXX_FLAGS "-Wdeprecated-declarations")
 
 set(CMAKE_CXX_FLAGS:STRING ${MY_CXX_FLAGS})
 
@@ -30,7 +27,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 # -----------------------------
 # External packages required.
 
-# pybind11 is required when Dakota is build with Python surrogates
+# pybind11 is required for decision models.
 find_package(pybind11 REQUIRED)
 
 # Temporary workaround: Dakota's build tree 
@@ -39,7 +36,7 @@ set(Dakota_BUILD_TREE
     ON CACHE BOOL "Enable Dakota build tree model")
 
 set(Dakota_DIR 
-    "$ENV{DAK_BUILD}/install/lib/cmake/Dakota/" 
+        "$ENV{DAK_INSTALL}/lib/cmake/Dakota/" 
     CACHE PATH "Path to the Dakota configuration directory.")
 find_package(Dakota REQUIRED PATHS ${Dakota_DIR} NO_DEFAULT_PATH)
 
@@ -69,9 +66,11 @@ MFGADriver.cpp
 MFGAEvaluatorCreator.cpp
 MFGAEvaluator.cpp
 AdaptiveDecisionMaker.cpp
+PythonGaussianErrorPredictor.cpp
 )
 
 # -----------------------------
 # link to libraries
 target_link_libraries(adopt ${Dakota_LIBRARIES})
 target_link_libraries(adopt ${Dakota_TPL_LIBRARIES})
+target_link_libraries(adopt pybind11::embed)

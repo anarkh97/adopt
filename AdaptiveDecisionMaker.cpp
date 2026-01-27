@@ -1,5 +1,10 @@
-#include <algorithm>
-#include <AdaptiveDecisionMaker.h>
+/************************************************************************
+ * Copyright © 2020 The Multiphysics Modeling and Computation (M2C) Lab
+ * <kevin.wgy@gmail.com> <kevinw3@vt.edu>
+ ************************************************************************/
+
+#include<algorithm>
+#include<AdaptiveDecisionMaker.h>
 
 // Dakota header for read/write
 // Note: This header also has functions for
@@ -38,8 +43,9 @@ double EuclideanDistance(const RealVector &v1, const RealVector &v2)
 //------------------------------------------------------------------------------
 
 AdaptiveDecisionMaker::AdaptiveDecisionMaker(const ProblemDescDB &problem_db_)
-    : problem_db(problem_db_), id2var(), id2error(), ready_to_predict(false),
-      num_train_calls(0)
+                     : problem_db(problem_db_), id2var(), 
+                       id2error(), ready_to_predict(false), num_train_calls(0),
+                       gp_model("gaussian_models.dakota_gp.GPSurrogate")
 {
 
   short dakota_level = problem_db.get_short("method.output");
@@ -63,15 +69,16 @@ AdaptiveDecisionMaker::AdaptiveDecisionMaker(const ProblemDescDB &problem_db_)
     break;
   }
 
-  String options_file = problem_db.get_string("method.advanced_options_file");
+  //String options_file = problem_db.get_string("method.advanced_options_file");
 
   //! Read Gaussian Process options from user specified file.
-  ReadOptionsFile(options_file);
+  //ReadOptionsFile(options_file);
 
   //! NOTE: since we use the default GP constructor, the default
   //! GP options have already been setup. Here we override a few
   //! GP options based on our requirements.
-  LoadGaussianProcesssOptions();
+  //LoadGaussianProcesssOptions();
+  
 }
 
 //------------------------------------------------------------------------------
@@ -341,7 +348,7 @@ bool AdaptiveDecisionMaker::NeedToComputeErrors()
 
 void AdaptiveDecisionMaker::LoadGaussianProcesssOptions()
 {
-
+/*
   ParameterList options;
   gp_model.get_options(options);
 
@@ -370,6 +377,7 @@ void AdaptiveDecisionMaker::LoadGaussianProcesssOptions()
   options.set("num restarts", 20);
 
   gp_model.set_options(options);
+*/
 }
 
 //------------------------------------------------------------------------------
@@ -557,30 +565,32 @@ void AdaptiveDecisionMaker::Train()
   //         << "to predict.\n";
   //}
 
-  WriteGaussianProcessModel();
-  WriteCurrentModelResults(parameters, responses, loss);
+  //WriteGaussianProcessModel();
+  //WriteCurrentModelResults(parameters, responses, loss);
 }
 
 //------------------------------------------------------------------------------
 
-void AdaptiveDecisionMaker::WriteGaussianProcessModel()
+void
+AdaptiveDecisionMaker::WriteGaussianProcessModel()
 {
   //! Temporarily save the model -- will be added as an option later.
   char full_name[256];
-  sprintf(full_name, "GaussianModel_%04d", num_train_calls);
+  sprintf(full_name, "PredictionModel_%04d", num_train_calls);
   String fname(full_name);
-  GaussianProcess::save(gp_model, fname, true);
+  gp_model.save_model(fname);
 }
 
 //------------------------------------------------------------------------------
 
 void AdaptiveDecisionMaker::WriteCurrentModelResults(const MatrixXd &parameters,
                                                      const VectorXd &responses,
-                                                     const double    loss)
+                                                     const double loss,
+                                                     const String &suffix)
 {
   //! Output data for plotting/debugging
   char full_name[256];
-  sprintf(full_name, "GaussianModel_%04d_data.txt", num_train_calls);
+  sprintf(full_name, "PredictionModel_%04d_%s_data.txt", num_train_calls, suffix.c_str());
   FILE *model_data_file = fopen(full_name, "w");
   if (!model_data_file)
   {
