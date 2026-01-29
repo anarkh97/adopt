@@ -6,6 +6,7 @@
 #include <../Utilities/include/Logging.hpp>
 
 // JEGA utility includes.
+#include <../Utilities/include/Design.hpp>
 #include <../Utilities/include/DesignGroup.hpp>
 #include <../Utilities/include/ConstraintInfo.hpp>
 
@@ -26,6 +27,28 @@ namespace MultiFidelityOptimizer
 
 namespace detail
 {
+
+//-----------------------------------------------------------------------------
+
+bool IsSameDesign(const Design &d1, const Design &d2)
+{
+
+  const DesignTarget &target = d1.GetDesignTarget();
+
+  if (&target != &d2.GetDesignTarget())
+    return false;
+
+  // Compare each design variable
+  size_t ndv = target.GetNDV();
+  for (size_t i = 0; i < ndv; ++i)
+  {
+    if (d1.GetVariableValue(i) != d2.GetVariableValue(i))
+      return false;
+  }
+
+  return true;
+
+}
 
 //-----------------------------------------------------------------------------
 
@@ -438,15 +461,14 @@ bool MFGAEvaluator::Evaluate(DesignGroup &group)
   //---------------------------------------------------------------------------
   bool r_ret = true;
   // TODO: AN: Should be a user option later.
-  if (true && !a_group.IsEmpty())
+  if (true && !ap_designs.empty())
   {
 
     GeneticAlgorithmFitnessAssessor &fitness_assessor
       = algorithm.GetOperatorSet().GetFitnessAssessor();
     GeneticAlgorithmSelector &selector
       = algorithm.GetOperatorSet().GetSelector();
-    DesignGroup &population
-      = algorithm.GetPopulation();
+    DesignGroup &population = algorithm.GetPopulation();
 
     DesignGroupVector gpvec;
     gpvec.reserve(2);
@@ -454,6 +476,12 @@ bool MFGAEvaluator::Evaluate(DesignGroup &group)
       gpvec.push_back(&population);
     if (group.SizeOF() > 0)
       gpvec.push_back(&group);
+
+    JEGALOG_II(GetLogger(), lquiet(), this,
+               ostream_entry(lquiet(), "A population of ")
+                 << population.GetSize()
+                 << " designs and an offspring group of " << group.GetSize()
+                 << " designs were added for (interim) fitness evaluation.")
 
     // Calculuate the fitness of previous population and current offspring group
     const FitnessRecord *fitness = fitness_assessor.AssessFitness(gpvec);
@@ -478,10 +506,12 @@ bool MFGAEvaluator::Evaluate(DesignGroup &group)
     vector<Design *> reeval;
     for (; design_it != design_e; ++design_it)
     {
-      // See if this design was approx evaluation.
-      // Could use DesignGroup::ContainsDesign(**design_it) instead.
-      // However, that is not working as expected. Need to check why.
-      if (find(ap_designs.begin(), ap_designs.end(), *design_it) != ap_designs.end())
+      vector<Design *>::iterator match
+        = std::find_if(ap_designs.begin(), ap_designs.end(),
+                       [design_it](Design *ap_des)
+                       { return IsSameDesign(**design_it, *ap_des); });
+
+      if (match != ap_designs.end())
       {
         // set all bits to 0
         (*design_it)->ResetAttributes();
@@ -612,15 +642,10 @@ bool MFGAEvaluator::EvaluationLoop(DesignGroup &group, String switch_val)
 {
   EDDY_FUNC_DEBUGSCOPE
 
-  char buffer[512];
-  sprintf(buffer, "%d", (int)group.GetSize());
-  String grp_size(buffer);
-  JEGALOG_II(GetLogger(), ldebug(), this,
-             text_entry(ldebug(), GetName()
-                                    + ": Performing group evaluation "
-                                      "for "
-                                    + grp_size + " designs (" + switch_val
-                                    + ")."))
+  JEGALOG_II(
+    GetLogger(), ldebug(), this,
+    ostream_entry(ldebug(), GetName() + ": Performing group evaluation for ")
+      << group.GetSize() << " designs (" + switch_val << ").")
 
   //---------------------------------------------------------------------------
   // Handle trivial cases
