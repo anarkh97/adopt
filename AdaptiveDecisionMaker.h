@@ -22,7 +22,6 @@ class AdaptiveDecisionMaker
 
   int  verbose;          //! Verbosity
   int  num_train_calls;  //! Number of times model is trained.
-  bool ready_to_predict; //! flag to switch on the GP model.
 
   //! Problem description
   const Dakota::ProblemDescDB &problem_db;
@@ -60,6 +59,7 @@ public:
 
   //! Update functions
   bool NeedToComputeErrors();
+  bool NeedMoreTrueEvaluations();
   void RecordEvaluationError(const int id, const Dakota::RealVector &variables,
                              const double &error);
   void RecordEvaluationDecision(const int                 id,
@@ -74,12 +74,11 @@ private:
 
   //! Helper functions to interface with dakota::surrogates
   void LoadGaussianProcesssOptions();
-  //! (re-)builds the GaussianProcess model
-  bool BuildGaussianProcessModel(const Eigen::MatrixXd &samples,
-                                 const Eigen::VectorXd &values, double &loss,
-                                 double split_ratio = 0.0,
-                                 /* default value of dakota::surrogates*/
-                                 const size_t seed = 42);
+  ////! (re-)builds the GaussianProcess model
+  //bool BuildGaussianProcessModel(const Eigen::MatrixXd &samples,
+  //                               const Eigen::VectorXd &values, double &loss,
+  //                               double split_ratio = 0.0,
+  //                               const size_t seed = 42);
 
   void CrossValidateGausssianModel() const;
 

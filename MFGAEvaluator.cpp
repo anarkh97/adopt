@@ -366,7 +366,7 @@ void MFGAEvaluator::RecordErrorInDecisionMaker(
 bool MFGAEvaluator::Evaluate(DesignGroup &group)
 {
 
-  GeneticAlgorithm &algorithm         = GetAlgorithm();
+  GeneticAlgorithm &algorithm = GetAlgorithm();
   size_t            generation_number = algorithm.GetGenerationNumber();
 
   //---------------------------------------------------------------------------
@@ -375,8 +375,8 @@ bool MFGAEvaluator::Evaluate(DesignGroup &group)
   if (group.IsEmpty())
     return true;
 
-  //! Return early for first (or zeroth) generation
-  // TODO: Could be user option later.
+  // TODO: Could be user option to perform fixed number of true iterations later.
+  //if (decision_maker.NeedMoreTrueEvaluations())
   if (generation_number <= 1)
   {
     bool ret = EvaluationLoop(group, "TRUE");
@@ -461,66 +461,72 @@ bool MFGAEvaluator::Evaluate(DesignGroup &group)
   //---------------------------------------------------------------------------
   bool r_ret = true;
   // TODO: AN: Should be a user option later.
-  if (true && !ap_designs.empty())
+  if (!a_group.IsEmpty())
   {
 
     GeneticAlgorithmFitnessAssessor &fitness_assessor
       = algorithm.GetOperatorSet().GetFitnessAssessor();
     GeneticAlgorithmSelector &selector
       = algorithm.GetOperatorSet().GetSelector();
-    DesignGroup &population = algorithm.GetPopulation();
+    double prev_best_fitness 
+      = algorithm.GetCurrentFitnesses().GetMaxFitness();
 
-    DesignGroupVector gpvec;
-    gpvec.reserve(2);
-    if (population.SizeOF() > 0)
-      gpvec.push_back(&population);
-    if (group.SizeOF() > 0)
-      gpvec.push_back(&group);
+    // Assess fitness of current designs using JEGA's fitness assessor
+    DesignGroupVector gpvec; gpvec.reserve(1);
+    gpvec.push_back(&group);
+    const FitnessRecord *gp_fitness = fitness_assessor.AssessFitness(gpvec);
 
-    JEGALOG_II(GetLogger(), lquiet(), this,
-               ostream_entry(lquiet(), "A population of ")
-                 << population.GetSize()
-                 << " designs and an offspring group of " << group.GetSize()
-                 << " designs were added for (interim) fitness evaluation.")
-
-    // Calculuate the fitness of previous population and current offspring group
-    const FitnessRecord *fitness = fitness_assessor.AssessFitness(gpvec);
-
-    JEGAIFLOG_II_F(fitness == 0x0, algorithm.GetLogger(), this,
+    JEGAIFLOG_II_F(gp_fitness == 0x0, algorithm.GetLogger(), this,
                    text_entry(lfatal(),
-                              "Could not recover population fitness (required"
+                              "Could not recover group fitness (required"
                               " for design re-evaluations).\n"))
 
     // TODO: (AN) Here we should correct numFinalSolutions (DAKOTA variable)
     // But, I currently do not have a way to extract this
-    // information directly (JEGA).
+    // information directly (from JEGA).
     size_t num_final_solutions = 1;
     //size_t num_total_designs   = gpvec.GetTotalDesignCount();
 
-    DesignOFSortSet iter_bests(
-      selector.SelectNBest(gpvec, num_final_solutions, *fitness));
-
-    DesignOFSortSet::const_iterator       design_it(iter_bests.begin());
-    const DesignOFSortSet::const_iterator design_e(iter_bests.end());
+    DesignOFSortSet iter_gp_bests(
+      selector.SelectNBest(gpvec, num_final_solutions, *gp_fitness));
 
     vector<Design *> reeval;
-    for (; design_it != design_e; ++design_it)
+    for (Design *design_it : iter_gp_bests)
     {
-      vector<Design *>::iterator match
-        = std::find_if(ap_designs.begin(), ap_designs.end(),
-                       [design_it](Design *ap_des)
-                       { return IsSameDesign(**design_it, *ap_des); });
+      double des_fitness = gp_fitness->GetFitness(*design_it);
+      JEGALOG_II(
+        GetLogger(), lnormal(), this,
+        ostream_entry(lnormal(), GetName() + ": This design fitness = ")
+        << des_fitness << ".\n")
 
-      if (match != ap_designs.end())
+      if (des_fitness >= prev_best_fitness)
       {
-        // set all bits to 0
-        (*design_it)->ResetAttributes();
-        reeval.push_back(*design_it);
+        JEGALOG_II(
+          GetLogger(), lnormal(), this,
+          ostream_entry(lnormal(), GetName() + ": Found new best. "))
+
+        // Check if this "Best" was evaluated using "APPROX"
+        SeparateVariables(*design_it, continuous_variables);
+        String switch_val = GetEvaluationType(continuous_variables);
+
+        //vector<Design *>::iterator match
+        //  = std::find_if(ap_designs.begin(), ap_designs.end(),
+        //                 [design_it](Design *ap_des)
+        //                 { return IsSameDesign(*design_it, *ap_des); });
+        //if (match != ap_designs.end())
+        
+        if (switch_val == "APPROX")
+        {
+          design_it->ResetAttributes();
+          reeval.push_back(design_it);
+        }
       }
     }
 
-    JEGALOG_II(GetLogger(), ldebug(), this,
-               text_entry(ldebug(), GetName() + ": Performing re-evaluation."))
+    JEGALOG_II(
+      GetLogger(), ldebug(), this,
+      ostream_entry(ldebug(), GetName() + ": Performing re-evaluation for ")
+        << reeval.size() << " designs.")
 
     DesignGroup reeval_group(target, reeval);
     r_ret = EvaluationLoop(reeval_group, "TRUE");

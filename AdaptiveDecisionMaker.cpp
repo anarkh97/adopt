@@ -38,7 +38,7 @@ double EuclideanDistance(const RealVector &v1, const RealVector &v2)
 //------------------------------------------------------------------------------
 
 AdaptiveDecisionMaker::AdaptiveDecisionMaker(const ProblemDescDB &problem_db_)
-    : problem_db(problem_db_), id2var(), id2error(), ready_to_predict(false),
+    : problem_db(problem_db_), id2var(), id2error(), 
       num_train_calls(0)
 {
 
@@ -122,9 +122,10 @@ void AdaptiveDecisionMaker::ReadOptionsFile(const String filename)
 
 //------------------------------------------------------------------------------
 
-void AdaptiveDecisionMaker::GetTargetAndNearestNeighbors(
-  const RealVector &cont_vars, int &target, IntVector &candidates,
-  size_t num_points)
+void AdaptiveDecisionMaker::GetTargetAndNearestNeighbors(const RealVector &cont_vars, 
+                                                         int              &target, 
+                                                         IntVector        &candidates,
+                                                         size_t            num_points)
 {
 
   if (candidates.length() != num_points)
@@ -193,7 +194,7 @@ String AdaptiveDecisionMaker::GetEvaluationType(const RealVector &cont_vars)
   //! Return when databse is empty.
   if (id2var.empty())
   {
-    if (verbose > 1)
+    if (verbose > 0)
     {
       Cout << "\n";
       Cout << "Adaptive SOGA Debug: True database is empty. Collecting ";
@@ -204,9 +205,9 @@ String AdaptiveDecisionMaker::GetEvaluationType(const RealVector &cont_vars)
   }
 
   //! Return when GP model is not ready.
-  if (!ready_to_predict)
+  if (num_train_calls == 0)
   {
-    if (verbose > 1)
+    if (verbose > 0)
     {
       Cout << "\n";
       Cout << "Adaptive SOGA Debug: Decision maker not ready to predict.";
@@ -223,7 +224,7 @@ String AdaptiveDecisionMaker::GetEvaluationType(const RealVector &cont_vars)
   {
     if (it->second == cont_vars)
     {
-      if (verbose > 1)
+      if (verbose > 0)
       {
         Cout << "\n";
         Cout << "Adaptive SOGA Debug: Found a matching design in the";
@@ -250,7 +251,7 @@ String AdaptiveDecisionMaker::GetEvaluationType(const RealVector &cont_vars)
     into = "APPROX";
   }
 
-  if (verbose > 1)
+  if (verbose > 0)
   {
     Cout << "\n";
     Cout << "variables  : " << query << "\n";
@@ -305,28 +306,59 @@ void AdaptiveDecisionMaker::RecordEvaluationDecision(
          << "the decision maker. Ignoring...\n";
     return;
   }
+  if (eval_type != "TRUE")
+  {
+    Cout << "Adaptive SOGA Error: I do not understand "
+         << eval_type << " type.\n";
+    abort_handler(METHOD_ERROR);
+  }
 
   // Store new true evaluations
-  if (eval_type == "TRUE")
+  //! Enforce uniform cont_vars length.
+  if (!id2var.empty())
   {
-    //! First check if evaluation id has already been mapped or not.
-    IntRealVectorMap::iterator it = id2var.find(eval_id);
-    if (it != id2var.end())
+    int expected_len = id2var.begin()->second.length();
+    if (cont_vars.length() != expected_len)
     {
-      if (verbose > 1)
-      {
-        Cout << "Adaptive SOGA Warning: Duplicate evaluation ID " << eval_id
-             << ", previously mapped to variables: " << it->second
-             << ". Skipping ...\n";
-      }
-    }
-    else
-    {
-      id2var[eval_id] = cont_vars;
+      Cerr << "Adaptive SOGA Error: Cannot record evaluation with "
+           << cont_vars.length() << " continuous variables; expected "
+           << expected_len << " (to match existing records).\n";
+      abort_handler(METHOD_ERROR);
     }
   }
 
-  // Do nothing if eval type is anything other than "TRUE", "APPROX", or "ERROR".
+  //! Check for duplicate evaluation id.
+  IntRealVectorMap::iterator it = id2var.find(eval_id);
+  if (it != id2var.end())
+  {
+    if (verbose > 0)
+    {
+      Cout << "Adaptive SOGA Warning: Duplicate evaluation ID " << eval_id
+           << ", previously mapped to variables: " << it->second
+           << ". Skipping ...\n";
+    }
+    return;
+  }
+
+  //! Check for duplicate design variables.
+  IntRealVectorMap::const_iterator       db_it = id2var.begin();
+  const IntRealVectorMap::const_iterator db_e  = id2var.end();
+  for (; db_it != db_e; ++db_it)
+  {
+    if (db_it->second == cont_vars)
+    {
+      if (verbose > 0)
+      {
+        Cout << "Adaptive SOGA Warning: Duplicate design variables "
+             << "already mapped to evaluation ID " << db_it->first
+             << ". Skipping ...\n";
+      }
+      return;
+    }
+  }
+
+  id2var[eval_id] = cont_vars;
+
 }
 
 //------------------------------------------------------------------------------
@@ -335,6 +367,45 @@ bool AdaptiveDecisionMaker::NeedToComputeErrors()
 {
   bool ret = id2var.size() != id2error.size();
   return ret;
+}
+
+//------------------------------------------------------------------------------
+
+bool AdaptiveDecisionMaker::NeedMoreTrueEvaluations()
+{
+
+  //! we need at least one point for the tests
+  if (id2var.empty())
+    return true;
+
+  ParameterList options;
+  gp_model.get_options(options);
+
+  bool estimate_trend =
+    options.sublist("Trend").get<bool>("estimate trend");
+
+  if (!estimate_trend)
+    return id2var.size() >= 1;
+  else
+  {
+    int degree =
+      options.sublist("Trend").sublist("Options").get<int>("max degree");
+    int var_dim = id2var.begin()->second.length();
+
+    if (degree == 0)
+      return id2var.size() > 1;
+    else if (degree == 1)
+      return id2var.size() > var_dim + 1;
+    else if (degree == 2)
+      return id2var.size() > (int)((var_dim + 1)*(var_dim + 2)/2);
+    else [[unlikely]]
+    {
+      Cerr << "Adaptive SOGA Error: Polynomial of degree > 2" 
+           << " not supported yet.\n";
+      abort_handler(METHOD_ERROR);
+    }
+  }
+
 }
 
 //------------------------------------------------------------------------------
@@ -370,6 +441,7 @@ void AdaptiveDecisionMaker::LoadGaussianProcesssOptions()
   options.set("num restarts", 20);
 
   gp_model.set_options(options);
+
 }
 
 //------------------------------------------------------------------------------
@@ -426,17 +498,17 @@ void AdaptiveDecisionMaker::LoadResponses(const IntRealMap &from,
 
 //------------------------------------------------------------------------------
 
-bool AdaptiveDecisionMaker::BuildGaussianProcessModel(const MatrixXd &samples,
-                                                      const VectorXd &values,
-                                                      double         &loss,
-                                                      double       split_ratio,
-                                                      const size_t seed)
-{
-
-  assert(samples.rows() == values.rows());
-
-  //! build the model
-  gp_model.build(samples, values);
+//bool AdaptiveDecisionMaker::BuildGaussianProcessModel(const MatrixXd &samples,
+//                                                      const VectorXd &values,
+//                                                      double         &loss,
+//                                                      double       split_ratio,
+//                                                      const size_t seed)
+//{
+//
+//  assert(samples.rows() == values.rows());
+//
+//  //! build the model
+//  gp_model.build(samples, values);
 
   //if(split_ratio == 0 and verbose>0)  {
   //  Cout << "Adaptive SOGA Warning: Train/Test split ratio not provided. "
@@ -511,9 +583,9 @@ bool AdaptiveDecisionMaker::BuildGaussianProcessModel(const MatrixXd &samples,
   //).squaredNorm();
 
   //loss = std::sqrt(numerator/denominator); // root mean squared.
-
-  return true;
-}
+//
+//  return true;
+//}
 
 //------------------------------------------------------------------------------
 
@@ -538,15 +610,7 @@ void AdaptiveDecisionMaker::Train()
   LoadParameters(id2var, parameters);
   LoadResponses(id2error, responses);
 
-  ////! Return when the database is too small (i.e., build failed).
-  double loss = 0.0;
-  if (!BuildGaussianProcessModel(parameters, responses, loss))
-  {
-    ready_to_predict = false;
-    return;
-  }
-
-  ready_to_predict = true;
+  gp_model.build(parameters, responses);
 
   ////! Switch the GP model on once loss is below a threshold.
   //if(loss < 5e-3) { // /*5e-2) {
@@ -558,7 +622,7 @@ void AdaptiveDecisionMaker::Train()
   //}
 
   WriteGaussianProcessModel();
-  WriteCurrentModelResults(parameters, responses, loss);
+  WriteCurrentModelResults(parameters, responses, 0.0);
 }
 
 //------------------------------------------------------------------------------
@@ -615,10 +679,6 @@ void AdaptiveDecisionMaker::WriteCurrentModelResults(const MatrixXd &parameters,
   }
   fclose(model_data_file);
 }
-
-//------------------------------------------------------------------------------
-
-//------------------------------------------------------------------------------
 
 //------------------------------------------------------------------------------
 
