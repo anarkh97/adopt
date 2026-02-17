@@ -457,11 +457,22 @@ bool MFGAEvaluator::Evaluate(DesignGroup &group)
   bool a_ret = EvaluationLoop(a_group, "APPROX");
 
   //---------------------------------------------------------------------------
+  // Synchronize the internal containers of DesignGroup 
+  //---------------------------------------------------------------------------
+  if (!group.SynchronizeOFAndDVContainers())
+  {
+    JEGALOG_II_G_F(this, text_entry(lfatal(),
+                   "Adaptive JEGA Error: Current design group " 
+                   "objective function is not current. This is "
+                   "required.\n"))
+  }
+
+  //---------------------------------------------------------------------------
   // Re-evaluate best designs w/ "APPROX" tags
   //---------------------------------------------------------------------------
   bool r_ret = true;
   // TODO: AN: Should be a user option later.
-  if (!a_group.IsEmpty())
+  if (!ap_designs.empty())
   {
 
     GeneticAlgorithmFitnessAssessor &fitness_assessor
@@ -494,28 +505,14 @@ bool MFGAEvaluator::Evaluate(DesignGroup &group)
     for (Design *design_it : iter_gp_bests)
     {
       double des_fitness = gp_fitness->GetFitness(*design_it);
-      JEGALOG_II(
-        GetLogger(), lnormal(), this,
-        ostream_entry(lnormal(), GetName() + ": This design fitness = ")
-        << des_fitness << ".\n")
-
       if (des_fitness >= prev_best_fitness)
       {
-        JEGALOG_II(
-          GetLogger(), lnormal(), this,
-          ostream_entry(lnormal(), GetName() + ": Found new best. "))
-
         // Check if this "Best" was evaluated using "APPROX"
-        SeparateVariables(*design_it, continuous_variables);
-        String switch_val = GetEvaluationType(continuous_variables);
-
-        //vector<Design *>::iterator match
-        //  = std::find_if(ap_designs.begin(), ap_designs.end(),
-        //                 [design_it](Design *ap_des)
-        //                 { return IsSameDesign(*design_it, *ap_des); });
-        //if (match != ap_designs.end())
-        
-        if (switch_val == "APPROX")
+        vector<Design *>::iterator match
+          = std::find_if(ap_designs.begin(), ap_designs.end(),
+                         [design_it](Design *ap_des)
+                         { return IsSameDesign(*design_it, *ap_des); });
+        if (match != ap_designs.end())
         {
           design_it->ResetAttributes();
           reeval.push_back(design_it);
@@ -525,8 +522,7 @@ bool MFGAEvaluator::Evaluate(DesignGroup &group)
 
     JEGALOG_II(
       GetLogger(), ldebug(), this,
-      ostream_entry(ldebug(), GetName() + ": Performing re-evaluation for ")
-        << reeval.size() << " designs.")
+      text_entry(ldebug(), GetName() + ": Performing re-evaluations."))
 
     DesignGroup reeval_group(target, reeval);
     r_ret = EvaluationLoop(reeval_group, "TRUE");
